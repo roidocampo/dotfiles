@@ -1,0 +1,15 @@
+.DS_Store
+
+*.swp
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+configs/vim/.netrwhist
+configs/vim/autoload/plug.vim
+configs/vim/bundle/*
+!configs/vim/bundle/.gitkeep
+configs/vim/spell/*
+configs/vim/swap/*
+!configs/vim/swap/.gitkeep

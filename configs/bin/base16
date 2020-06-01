@@ -1,0 +1,359 @@
+#!/bin/bash
+
+########################################################################
+# Configuration
+########################################################################
+
+BASE16_DIR=$HOME/.config/base16-shell
+BASE16_ENV_DIR=$HOME/.config/base16-envs
+BASE16_ENV_FILE="$BASE16_ENV_DIR"/"$CONDA_DEFAULT_ENV"-theme.b16
+
+########################################################################
+# Install
+########################################################################
+
+function install {
+
+    if [ -d "$BASE16_DIR" ]; then
+        echo "* base16 already installed (to update, run base16 update)"
+        return
+    fi
+
+    git clone \
+        "https://github.com/chriskempson/base16-shell.git" \
+        "$BASE16_DIR"
+}
+
+########################################################################
+# Update
+########################################################################
+
+function update {
+
+    if [ ! -d "$BASE16_DIR" ]; then
+        echo "* base16 not installed (run base16 install)"
+        return
+    fi
+
+    cd "$BASE16_DIR"
+    git pull
+
+}
+
+########################################################################
+# load_theme
+########################################################################
+
+function load_theme {
+
+    if [ ! -d "$BASE16_DIR" ]; then
+        echo "* base16 not installed (run base16 install)"
+        return
+    fi
+
+    local theme=$1
+    local script=$BASE16_DIR/scripts/base16-${theme}.sh
+
+    if [ ! -f "${script}" ]; then
+        echo "* cannot find theme ${theme}"
+        return
+    fi
+
+    . "${script}"
+
+}
+
+########################################################################
+# load_default
+########################################################################
+
+function load_default {
+
+    if [ ! -d "$BASE16_DIR" ]; then
+        echo "* base16 not installed (run base16 install)"
+        return
+    fi
+
+    local theme
+    local script
+
+    if [ -f "$BASE16_ENV_FILE" ]; then
+        theme=$(<"$BASE16_ENV_FILE")
+    fi
+
+    script=$BASE16_DIR/scripts/base16-${theme}.sh
+
+    if [ ! -f "${script}" ]; then
+        theme=default-light
+        script=$BASE16_DIR/scripts/base16-${theme}.sh
+    fi
+
+    echo ". \"${script}\"; export BASE16_THEME=\"$theme\""
+
+}
+
+########################################################################
+# load
+########################################################################
+
+function load {
+
+    if [ "$1" ]; then
+        load_theme "$@"
+    else
+        load_default
+    fi
+
+}
+
+########################################################################
+# set_theme
+########################################################################
+
+function set_theme {
+
+    if [ ! -d "$BASE16_DIR" ]; then
+        echo "* base16 not installed (run base16 install)"
+        return
+    fi
+
+    local theme=$1
+    local script=$BASE16_DIR/scripts/base16-${theme}.sh
+
+    if [ ! -f "${script}" ]; then
+        echo "* cannot find theme ${theme}"
+        return
+    fi
+
+    mkdir -p "$BASE16_ENV_DIR"
+    
+    echo "$theme" > "$BASE16_ENV_FILE"
+
+    echo "* theme \`$theme\` saved in file \`$BASE16_ENV_FILE\`"
+
+}
+
+########################################################################
+# list_themes
+########################################################################
+
+function list_themes {
+
+    if [ ! -d "$BASE16_DIR" ]; then
+        echo "* base16 not installed (run base16 install)"
+        return
+    fi
+
+    for script in "$BASE16_DIR"/scripts/base16*.sh; do
+        script_name=${script##*/}
+        script_name=${script_name%.sh}
+        theme=${script_name#*-}
+        func_name="base16_${theme}"
+        echo "$theme"
+    done
+
+}
+
+########################################################################
+# select_option
+########################################################################
+
+SO_ACTION=select
+
+# Renders a text based list of options that can be selected by the
+# user using up, down and enter keys and returns the chosen option.
+#
+#   Arguments   : list of options, maximum of 255
+#                 "opt1" "opt2" ...
+#   Return value: selected index (0 for opt1, 1 for opt2 ...)
+function select_option {
+
+    local opt
+    local key
+
+    local selected=$1
+    shift
+
+    # little helpers for terminal print control and key input
+    ESC=$( printf "\033")
+    cursor_blink_on()  { printf "$ESC[?25h"; }
+    cursor_blink_off() { printf "$ESC[?25l"; }
+    cursor_to()        { printf "$ESC[$1;${2:-1}H"; }
+    print_option()     { printf " %-25s " "$1"; }
+    print_selected()   { printf "$ESC[7m %-25s $ESC[27m" "$1"; }
+    clear_line()       { printf "$ESC[K"; }
+    get_cursor_row()   { IFS=';' read -sdR -p $'\E[6n' ROW COL; echo ${ROW#*[}; }
+    key_input()        { read -s -n1 key 2>/dev/null >&2
+                           if [[ $key = "Q"  ]]; then echo quit;  fi
+                           if [[ $key = "q"  ]]; then echo quit;  fi
+                           if [[ $key = "S"  ]]; then echo set;  fi
+                           if [[ $key = "s"  ]]; then echo set;  fi
+                           if [[ $key = "N"  ]]; then echo next;  fi
+                           if [[ $key = "n"  ]]; then echo next;  fi
+                           if [[ $key = ""   ]]; then echo enter; fi
+                           if [[ $key = $ESC ]]; then
+                               read -s -n2 key 2>/dev/null >&2
+                               if [[ $key = [A ]]; then echo up;    fi
+                               if [[ $key = [B ]]; then echo down;  fi
+                               if [[ $key = [C ]]; then echo right; fi
+                               if [[ $key = [D ]]; then echo left;  fi
+                           fi
+                       }
+
+    # number of columns
+    local numcols=3
+    local startrow=`get_cursor_row`
+
+    # initially print empty new lines (scroll down if at bottom of screen)
+    local idy=0
+    for opt; do
+        if (( idy % numcols == 0 )); then
+            printf "\n"
+        fi
+        (( idy++ ))
+    done
+
+    # determine current screen position for overwriting the options
+    local lastrow=`get_cursor_row`
+    #local startrow=$(($lastrow - $# / $numcols))
+
+    # ensure cursor and input echoing back on upon a ctrl+c during read -s
+    trap "cursor_blink_on; stty echo; printf '\n'; exit" 2
+    stty -echo
+    cursor_blink_off
+
+    while true; do
+        # print options by overwriting the last lines
+        local idx=0
+        local row=0
+        local col=0
+        local last_in_col=()
+        for opt; do
+            if (( idx % numcols == 0 )); then
+                cursor_to $(($startrow + $row))
+                (( row++ ))
+                col=0
+            fi
+            if [ $idx -eq $selected ]; then
+                print_selected "$opt"
+            else
+                print_option "$opt"
+            fi
+            last_in_col[$col]=$idx
+            ((idx++))
+            ((col++))
+        done
+
+        # user key control
+        case `key_input` in
+            enter) SO_ACTION=select
+                   break;;
+            quit)  SO_ACTION=quit
+                   break;;
+            set)   SO_ACTION=set
+                   break;;
+            next)  (( selected++ ));
+                   if [ $selected -ge $# ]; then selected=0; fi;
+                   break;;
+            left)  (( selected-- ));
+                   if [ $selected -lt 0 ]; then selected=$(($# - 1)); fi;;
+            right) (( selected++ ));
+                   if [ $selected -ge $# ]; then selected=0; fi;;
+            up)    (( selected -= numcols ));
+                   if [ $selected -lt 0 ]; then selected=$((last_in_col[selected+numcols])); fi;;
+            down)  (( selected += numcols ));
+                   if [ $selected -ge $# ]; then selected=$((selected % numcols)); fi;;
+        esac
+    done
+
+    # cursor position back to normal
+    cursor_to $lastrow
+    printf "\n"
+    cursor_blink_on
+    stty echo
+
+    return $selected
+}
+
+########################################################################
+# test_themes
+########################################################################
+
+function test_themes {
+
+    local choice=0
+    local theme="(none)"
+    local options=( $(list_themes) )
+
+    for t in "${!options[@]}"; do
+        if [ "${options[$t]}" = "$BASE16_THEME" ]; then
+            choice=$t
+            theme=$BASE16_THEME
+            break
+        fi
+    done
+
+    while true; do
+        clear
+
+        echo "Current theme: $theme"
+        echo
+
+        echo "Select theme using arrow keys, enter to confirm, S to set theme, Q to cancel and quit:"
+        echo
+
+        select_option "$choice" "${options[@]}"
+        choice=$?
+
+        if [ "$SO_ACTION" = "quit" ]; then
+            if [ -n "$BASE16_THEME" ]; then
+                load_theme "$BASE16_THEME"
+            fi
+            break
+        fi
+
+        theme=${options[$choice]}
+
+        if [ "$SO_ACTION" = "set" ]; then
+            load_theme "$theme"
+            set_theme "$theme"
+            break
+        fi
+
+        load_theme "$theme"
+
+    done
+
+
+}
+
+########################################################################
+# main
+########################################################################
+
+function main {
+
+    local action="$1"
+    shift
+
+    case "$action" in
+        install)          install ;;
+        update)           update ;;
+        list|list_themes) list_themes ;;
+        load)             load "$@" ;;
+        load_theme)       load_theme "$@" ;;
+        test|choose|'')   test_themes ;;
+        *)
+            echo "* base16 error: unknown action $action"
+    esac
+
+}
+
+########################################################################
+# 
+########################################################################
+
+main "$@"
+
+exit
+

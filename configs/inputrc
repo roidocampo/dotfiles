@@ -1,0 +1,17 @@
+
+set completion-ignore-case on
+set match-hidden-files off
+set skip-completed-text on
+set colored-stats on
+set visible-stats on
+
+## Key Bidings
+
+# Shift-Tab
+"\e[Z": complete-filename
+
+# Up Arrow
+"\e[A": history-search-backward
+
+# Down Arrow
+"\e[B": history-search-forward

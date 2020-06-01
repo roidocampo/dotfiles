@@ -1,0 +1,15 @@
+#!/bin/bash
+
+file=$1
+line=$2
+
+file=${1//\//_@_}
+file=~/.skim_vim_search/$file
+
+id=$(date +%s.%N)
+
+mkdir -p ~/.skim_vim_search
+
+echo "$id" >"$file"
+echo "$line" >>"$file"
+

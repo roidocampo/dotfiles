@@ -1,0 +1,69 @@
+########################################################################
+#
+########################################################################
+
+if [ -n "$PS1" -o -n "$_BASH_PROFILE_ECHO" ]; then
+    ECO=yes
+fi
+
+[ -n "$PS1" ] && export BASH_SILENCE_DEPRECATION_WARNING=1
+[ -n "$ECO" ] && echo '* starting login shell'
+
+########################################################################
+# PATH and local environment setup
+########################################################################
+
+[ -n "$ECO" ] && echo '* configuring PATH and local environment vars'
+
+function prepend_to {
+    if [ -d "$2" -a "${!1}" != "$2" ]; then
+        eval $1=\"${!1//":$2:"/:}\"   # delete in the middle
+        eval $1=\"${!1/%":$2"/}\"     # delete at the end
+        eval $1=\"${!1/#"$2:"/}\"     # delete at the beginning
+        eval $1=\"$2${!1:+":${!1}"}\" # prepend value
+    fi
+}
+
+if [ -f "$HOME/.bash_profile.local" ]; then
+    . "$HOME/.bash_profile.local"
+fi
+
+prepend_to PATH "$HOME/.local/bin"
+prepend_to PATH "$HOME/.bin_mac"
+prepend_to PATH "$HOME/.bin_linux"
+prepend_to PATH "$HOME/.bin"
+
+########################################################################
+# CONDA initiation
+########################################################################
+
+[ -n "$ECO" ] && echo '* initiaing conda'
+
+export CONDA_BASE=$HOME/opt/miniconda3
+
+if [ -f "$CONDA_BASE/etc/profile.d/conda.sh" ]; then
+    . "$CONDA_BASE/etc/profile.d/conda.sh"
+    CONDA_SETUP_DONE=yes
+fi
+
+########################################################################
+# Load .bashrc if the shell is interactive
+########################################################################
+
+if [ -n "$PS1" -a -n "$BASH" -a -f "$HOME/.bashrc" ]; then
+    . "$HOME/.bashrc"
+fi
+
+########################################################################
+# 
+########################################################################
+
+unset _BASH_PROFILE_ECHO
+unset ECO
+unset -f prepend_to
+
+########################################################################
+# 
+########################################################################
+
+# vi: ft=bash

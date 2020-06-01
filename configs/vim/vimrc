@@ -1,0 +1,199 @@
+"########################################################################
+"########################################################################
+"##
+"## GENERAL OPTIONS
+"##
+"########################################################################
+"########################################################################
+
+set nocompatible                  "Use vim, not vi
+set directory^=$HOME/.vim/swap//  "Put all swap files together in one place
+set textwidth=79                  "Break lines after 79 chars
+set shiftwidth=4                  "Indent using four spaces
+set softtabstop=4
+set expandtab                     "Use only spaces
+set ignorecase                    "Search is often case insensitive
+set smartcase                     "Search is sometimes case sensitive
+set autoindent                    "Use the same indent as in previous line
+set ruler                         "Show ruler (position)
+set visualbell                    "Do not beep
+set showmatch                     "Match brackets
+set whichwrap=<,>,[,],b,s         "Left/Right keys moves to next line
+set backspace=indent,eol,start    "Delete/Backspace goes to previous line
+set modeline                      "Check modelines in files (things like // vim: .. //)
+set title                         "Show information about vi the terminal's titlebar
+set incsearch                     "Use incremental search
+set hlsearch                      "Hilight search results
+set mouse=a                       "Enable mouse ('a' stands for all)
+set mousemodel=popup              "Right click gives a menu
+set nowrap                        "Do no wrap lines
+set nojoinspaces                  "Join command should not add 2 spaces after .
+set wildmenu                      "Nice menu for completing commands
+set spelllang=en_us               "Default dictionary
+set confirm                       "Ask before quitting if there are changes
+set hidden                        "Allow `unsaved` buffers
+set completeopt=menuone,noselect  "More normal completions
+set guioptions-=r                 "No scrollbar on gui
+set scrolloff=1                   "Show one line above/below cursor
+set sidescrolloff=5               "Show 5 colomuns left/right of cursor
+
+"########################################################################
+"########################################################################
+"##
+"## PLUGINS
+"##
+"########################################################################
+"########################################################################
+
+"Install vim-plug if needed
+
+if empty(glob('~/.vim/autoload/plug.vim'))
+    silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
+        \ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+    autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
+
+"After changing this list, restart vim and run command :PlugInstall
+
+call plug#begin('~/.vim/bundle')
+
+    "Global plugins
+    Plug 'chriskempson/base16-vim'
+    Plug 'ConradIrwin/vim-bracketed-paste'
+    Plug 'ervandew/supertab'
+    Plug 'SirVer/ultisnips'
+    Plug 'godlygeek/tabular'
+    Plug 'tpope/vim-commentary'
+    Plug 'dense-analysis/ale'
+    Plug 'christoomey/vim-tmux-navigator'
+    Plug 'vim-utils/vim-man'
+    Plug 'rkitover/vimpager'
+
+    "Filetype plugins
+    Plug 'hdima/python-syntax',                 { 'for': 'python' }
+    Plug 'hynek/vim-python-pep8-indent',        { 'for': 'python' }
+    Plug 'octol/vim-cpp-enhanced-highlight',    { 'for': 'cpp' }
+    Plug 'JulesWang/css.vim',                   { 'for': 'css' }
+    Plug 'othree/html5.vim',                    { 'for': 'html' }
+    Plug 'pangloss/vim-javascript',             { 'for': 'javascript' }
+    Plug 'StanAngeloff/php.vim',                { 'for': 'php' }
+    Plug 'coreysharris/Macaulay2.vim',          { 'for': 'Macaulay2' }
+    Plug 'aaronj1335/underscore-templates.vim', { 'for': 'mtpl' }
+    Plug 'Glench/Vim-Jinja2-Syntax',            { 'for': 'jinja' }
+    Plug 'ssteffl/lark-syntax.vim'
+
+    "My blobal plugins
+    Plug '~/.vim/myplugins/diff_colors'
+    Plug '~/.vim/myplugins/myultisnips'
+    Plug '~/.vim/myplugins/tmux_send_keys'
+    Plug '~/.vim/myplugins/tmux_clipboard'
+
+    "My filetype plugins
+    if has('mac')
+        Plug '~/.vim/myplugins/tex',   { 'for': 'tex' }
+    endif
+    Plug '~/.vim/myplugins/vert_help', { 'for': 'help' }
+    Plug '~/.vim/myplugins/singular',  { 'for': 'singular' }
+    Plug '~/.vim/myplugins/css_align', { 'for': ['css', 'html', 'bib', 'php'] }
+
+call plug#end()
+
+"########################################################################
+"########################################################################
+"##
+"## LOOK AND COLORS
+"##
+"########################################################################
+"########################################################################
+
+if has("mac")
+  set t_ts=]1;
+  set t_fs=
+endif
+if &term == "screen-256color"
+  set t_ts=]2;
+  set t_fs=\
+endif
+
+set titlestring=%t%(\ %M%)%(\ (%<%0.50{expand(\"%:p:~:h\")})%)%(\ %a%)\ -\ %{v:servername\ ?\ v:servername\ :\ \"VIM\"}
+
+if !empty($INSUDOEDIT)
+    augroup on_change_colorschema
+        autocmd!
+        autocmd ColorScheme * hi! Normal ctermbg=235
+    augroup END
+endif
+
+if !empty($BASE16_THEME)
+    let base16colorspace=256
+    colorscheme base16-$BASE16_THEME
+endif
+
+"########################################################################
+"########################################################################
+"##
+"## KEYBOARD ADJUSTMENTS
+"##
+"########################################################################
+"########################################################################
+
+command W w
+nmap Q <nop>
+inoremap <C-A> <C-X>s
+map  <silent> <PageDown> @='10j'<CR>
+map  <silent> <PageUp> @='10k'<CR>
+imap <silent> <PageDown> <C-O><PageDown>
+imap <silent> <PageUp> <C-O><PageUp>
+
+" Use <C-L> to clear the highlighting of :set hlsearch.
+if maparg('<C-L>', 'n') ==# ''
+    nnoremap <silent> <C-L> :nohlsearch<CR><C-L>
+endif
+
+"########################################################################
+"########################################################################
+"##
+"## TMUX NAVIGATOR
+"##
+"########################################################################
+"########################################################################
+
+let g:tmux_navigator_no_mappings=1
+nnoremap <silent> <Leader>h :TmuxNavigateLeft<cr>
+nnoremap <silent> <Leader>j :TmuxNavigateDown<cr>
+nnoremap <silent> <Leader>k :TmuxNavigateUp<cr>
+nnoremap <silent> <Leader>l :TmuxNavigateRight<cr>
+nnoremap <silent> <c-\>     :TmuxNavigatePrevious<cr>
+
+"########################################################################
+"########################################################################
+"##
+"## PTYHON RELATED
+"##
+"########################################################################
+"########################################################################
+
+autocmd FileType python setlocal completeopt-=preview
+let g:UltiSnipsExpandTrigger = "<tab>"
+let g:UltiSnipsJumpForwardTrigger = "<tab>"
+let g:UltiSnipsJumpBackwardTrigger = "<s-tab>"
+let g:python_highlight_space_errors = 0
+let g:python_highlight_all = 1
+augroup filetypedetect
+    au! BufRead,BufNewFile *.sage,*.spyx,*.pyx setfiletype python
+augroup END
+
+"########################################################################
+"########################################################################
+"##
+"## MISC
+"##
+"########################################################################
+"########################################################################
+
+let g:is_bash = 1        "avoid funny-looking syntax errors with advanced bash scripts
+let g:sh_no_error = 1    "also for bash
+let filetype_m = "mma"   "files with .m extension are Mathematica files
+let g:tex_flavor='latex'
+let g:cpp_class_scope_highlight = 1
+

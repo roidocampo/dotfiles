@@ -1,0 +1,9 @@
+#!/bin/bash
+
+complete -o default -f -X '!*.tex' vi
+complete -o default -f -X '!*.tex' view
+complete -o default -f -X '!*.+(pdf|pdfd|app)' open
+complete -o default -f -X '!*.+(pdf|pdfd)' skim
+complete -o default -f -X '!*.+(pdf|pdfd)' acrobat
+
+# vi: ft=bash

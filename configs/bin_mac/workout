@@ -1,0 +1,8 @@
+#!/bin/bash
+
+exec \
+    open \
+    -na "Google Chrome" \
+    --args --new-window \
+    ~/Dropbox/Sandbox/__nytimes_training/index.html
+

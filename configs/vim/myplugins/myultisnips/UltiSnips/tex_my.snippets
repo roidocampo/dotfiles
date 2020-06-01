@@ -1,0 +1,74 @@
+snippet doc
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%                                                                       %%
+%%   A document                                                         %%
+%%                                                                       %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%section{Preamble}
+
+\documentclass[letter,11pt,reqno]{amsart}
+
+\usepackage[utf8]{inputenc}
+
+\usepackage{etex}
+
+\usepackage{xcolor}
+
+\definecolor{verydarkblue}{rgb}{0,0,0.5}
+
+\usepackage[
+    breaklinks,
+    colorlinks,
+    citecolor=verydarkblue,
+    linkcolor=verydarkblue,
+    urlcolor=verydarkblue,
+    pagebackref=true,
+    hyperindex
+]{hyperref}
+
+\backrefenglish
+
+\usepackage{fancyhdr}
+
+\usepackage[
+    % margin=1.3in,
+    hscale=0.70,
+    vscale=0.775,
+    headheight=13pt,
+    centering,
+    % showframe
+]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathdots}
+\usepackage{framed}
+\usepackage[capitalize]{cleveref}
+\usepackage{array}
+\usepackage[alphabetic]{amsrefs}
+\usepackage[all,cmtip]{xy}
+
+\begin{document}
+
+%section{Content}
+
+${0}
+
+%section{-}
+
+\end{document}
+
+% TeXCompile: aux-dir aux
+% TeXCompile: synctex off
+endsnippet
+
+
+snippet "b(egin)?" "begin{} / end{}" br
+\begin{${1:something}}
+${0:${VISUAL}}
+\end{$1}
+endsnippet

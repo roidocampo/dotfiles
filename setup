@@ -1,0 +1,338 @@
+#!/bin/bash
+
+########################################################################
+# default conda packages
+########################################################################
+
+CONDA_PACKAGES="\
+    bash \
+    bash-completion \
+    coreutils \
+    curl \
+    findutils \
+    gawk \
+    git \
+    htop \
+    imagemagick \
+    ipython \
+    make \
+    python \
+    tmux \
+    tree \
+    vim \
+    wget \
+"
+
+########################################################################
+# show_help
+########################################################################
+
+show_help() {
+
+    box_start "DOTFILES"
+    box_row 16 35 \
+        "./setup dotfiles" "  ::  setup configuration files in \$HOME"
+    box_row 16 35 \
+        "./setup conda"    "  ::  download and install miniconda3"
+    box_row 16 35 \
+        "./setup jupyter"  "  ::  setup jupyter environment in conda"
+    box_row 16 35 \
+        "./setup sage"     "  ::  setup sage environment in conda"
+    box_row 16 35 \
+        "./setup help"     "  ::  print this help"
+    box_end
+
+}
+
+########################################################################
+# box drawing
+########################################################################
+
+box_start() {
+    TITLE=$1 
+    if [ -n "$2" ]; then
+        BOX_COLOR=$2
+    else
+        BOX_COLOR=34
+    fi
+    if [ -z "$NOT_FIRST_BOX" ]; then
+        printf '\n'
+        NOT_FIRST_BOX=true
+    fi
+    printf '  \033[00;%sm┌─── %s ' "$BOX_COLOR" "$TITLE"
+    i=0
+    padlen=$(( 74 - ${#TITLE} ))
+    while [ "$i" -lt "$padlen" ]; do
+        printf '─'
+        i=$(( i+1 ))
+    done
+    printf '┐\033[00m\n'
+    printf '  \033[00;%sm│%-79.79s│\033[00m\n' "$BOX_COLOR" ''
+}
+
+box_row() {
+    CWIDTH1=$1
+    COLOR=$2
+    COL1=$3
+    COL2=$4
+    CWIDTH2=$(( 75 - CWIDTH1 ))
+    printf '  \033[00;%sm│\033[00m  ' "$BOX_COLOR"
+    printf '\033[00;%sm' "$COLOR"
+    printf '%-*.*s' "$CWIDTH1" "$CWIDTH1" "$COL1"
+    printf '\033[00m '
+    printf '%-*.*s' "$CWIDTH2" "$CWIDTH2" "$COL2"
+    printf ' \033[00;%sm│\033[00m\n' "$BOX_COLOR"
+}
+
+box_end() {
+    printf '  \033[00;%sm│%-79.79s│\033[00m\n' "$BOX_COLOR" ''
+    printf '  \033[00;%sm└' "$BOX_COLOR"
+    i=0
+    while [ "$i" -lt 79 ]; do
+        printf '─'
+        i=$(( i+1 ))
+    done
+    printf '┘\033[00m\n\n'
+}
+
+########################################################################
+# setup_dotfiles
+########################################################################
+
+setup_dotfiles() {
+
+    DOTFILES_DIR_NAME=$(dirname "$(true_path "$0")")
+
+    UNAME=$(uname)
+
+    if ! cd "$DOTFILES_DIR_NAME/configs"; then
+        echo "Error. Cannot cd to \`$DOTFILES_DIR_NAME/configs\`"
+        return 1
+    fi
+
+    box_start "DOTFILES SETUP"
+
+    for DOTFILE in *; do
+        case "$DOTFILE" in
+            *_mac)
+                [ "X$UNAME" = "XDarwin" ] && link_dotfile "$DOTFILE" ;;
+            *_linux)
+                [ "X$UNAME" = "XLinux" ] && link_dotfile "$DOTFILE" ;;
+            *)
+                link_dotfile "$DOTFILE" ;;
+        esac
+    done
+
+    box_end
+
+}
+
+########################################################################
+# link_dotfile
+########################################################################
+
+link_dotfile() {
+
+
+    SOURCE_FILE=$DOTFILES_DIR_NAME/configs/$1
+
+    LINK_FILE=$HOME/.$1
+
+    if [ ! -e "$SOURCE_FILE" ]; then
+        box_row 20 31 "$1" "source does not exist"
+        return
+    fi
+
+    if [ -e "$LINK_FILE" ]; then
+
+        if [ -L "$LINK_FILE" ]; then
+            if [ "X$(true_path "$LINK_FILE")" = "X$SOURCE_FILE" ]; then
+                box_row 20 39 "$1" "link was already configured"
+                return
+            fi
+        fi
+
+        #backup_away "$LINK_FILE"
+        MSG="targed existed, backup created, and "
+
+    else
+
+        MSG="new "
+
+    fi
+
+    #mkdir -p "$(dirname "$LINK_FILE")"
+    #ln -s "$SOURCE_FILE" "$LINK_FILE"
+    box_row 20 32 "$1" "${MSG}link configured"
+
+}
+
+########################################################################
+# true_path
+########################################################################
+
+true_path() {(
+    ORIGINAL_FILE=$1
+    TARGET_FILE=$1
+
+    if ! cd "$(dirname "$TARGET_FILE")"; then
+        echo "$ORIGINAL_FILE"
+        return 1
+    fi
+    TARGET_FILE=$(basename "$TARGET_FILE")
+
+    # Iterate down a (possible) chain of symlinks
+    while [ -L "$TARGET_FILE" ]; do
+        TARGET_FILE=$(readlink "$TARGET_FILE")
+        if ! cd "$(dirname "$TARGET_FILE")"; then
+            echo "$ORIGINAL_FILE"
+            return 1
+        fi
+        TARGET_FILE=$(basename "$TARGET_FILE")
+    done
+
+    # Compute the canonicalized name by finding the physical path 
+    # for the directory we're in and appending the target file.
+    PHYS_DIR=$(pwd -P)
+    RESULT=$PHYS_DIR/$TARGET_FILE
+    echo "$RESULT"
+)}
+
+########################################################################
+# backup_away
+########################################################################
+
+backup_away() {
+    FILE=$1
+    BACKUP_FILE=${FILE}_$(date '+%Y-%m-%d--%H-%M-%S')
+    while [ -e "$BACKUP_FILE" ]; do
+        sleep 1
+        BACKUP_FILE=${FILE}_$(date '+%Y-%m-%d--%H-%M-%S')
+    done
+    mv "$FILE" "$BACKUP_FILE"
+}
+
+########################################################################
+# setup_conda
+########################################################################
+
+setup_conda() {
+
+    CONDA_BASE=$HOME/opt/miniconda3
+
+    box_start "CONDA SETUP"
+
+    if [ -e "$CONDA_BASE" ]; then
+        box_row 1 31 "!" "Conda already setup (this script only needs to be run once)"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Determining platform"
+
+    UNAME_KERNEL=$(uname)
+    UNAME_MACHINE=$(uname -m)
+    if [ "X$UNAME_KERNEL" = "XDarwin" ]; then
+        REPO=https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+    elif [ "X$UNAME_KERNEL" = "XLinux" ] && [ "X$UNAME_MACHINE" = "Xx86_64" ]; then
+        REPO=https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    elif [ "X$UNAME_KERNEL" = "XLinux" ] && [ "X$UNAME_MACHINE" = "Xx86_64" ]; then
+        REPO=https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86.sh
+    else
+        box_row 7 31 "* Error" "Platform not supported"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Creating temporary directory"
+
+    TEMPDIR=$(mktemp -d -t "dotfiles-XXXXXXXXXXXXXXXX")
+
+    if ! cd "$TEMPDIR"; then
+        box_row 7 31 "* Error" "Cannot cd to $TEMPDIR"
+        box_end
+        rm -rf "$TEMPDIR"
+        return
+    fi
+
+    box_row 1 33 "*" "Downloading: $(basename "$REPO")"
+    box_end
+
+    curl -o miniconda_installer.sh "$REPO"
+
+    printf '\n'
+
+    box_start "CONTINUING CONDA SETUP"
+    box_row 1 33 "*" "Installing miniconda"
+    box_end
+
+    bash ./miniconda_installer.sh -b -p "$CONDA_BASE"
+
+    printf '\n'
+
+    box_start "CONTINUING CONDA SETUP"
+    box_row 1 33 "*" "Loading and activating conda"
+
+    # shellcheck disable=SC1090
+    . "$CONDA_BASE/etc/profile.d/conda.sh"
+    conda activate base
+
+    box_row 1 33 "*" "Configuring conda-forge"
+
+    conda config --add channels conda-forge 2>/dev/null
+    conda config --set channel_priority strict 2>/dev/null
+
+    box_row 1 33 "*" "Creating conda environment \`env0\`"
+    box_end
+
+    # shellcheck disable=SC2086
+    conda create --name env0 $CONDA_PACKAGES
+
+    printf '\n'
+
+    box_start "CONTINUING CONDA SETUP"
+    box_row 1 33 "*" "Cleaning temporary directory"
+
+    rm -rf "$TEMPDIR"
+
+    box_row 1 33 "*" "Done!"
+    box_end
+
+}
+
+########################################################################
+# not_implemented
+########################################################################
+
+not_implemented() {
+    box_start "NOT IMPLEMENTED" 31 >&2
+    box_row 40 33 "Sorry! This has not been implemented yet." >&2
+    box_end >&2
+    show_help >&2
+    exit 1
+}
+
+########################################################################
+# main
+########################################################################
+
+main() {
+
+    if [ "$#" -le "1" ] ; then
+        case "$1" in
+            help|'') show_help; exit ;;
+            dotfiles) setup_dotfiles; exit ;;
+            conda) setup_conda; exit ;;
+            jupyter|sage) not_implemented; exit ;;
+        esac
+    fi
+
+    box_start ERROR 31 >&2
+    box_row 40 33 "Usage: $0 ACTION" >&2
+    box_end >&2
+    show_help >&2
+    exit 1
+
+}
+
+main "$@"

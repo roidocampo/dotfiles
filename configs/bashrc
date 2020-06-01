@@ -1,0 +1,110 @@
+########################################################################
+# CHECK INTERACTIVE
+########################################################################
+
+[ -z "$PS1" -o -z "$BASH" ] && return
+
+########################################################################
+# CONDA
+########################################################################
+
+if [ -z "$CONDA_SETUP_DONE" \
+     -a -f "$CONDA_BASE/etc/profile.d/conda.sh" \
+]; then
+    . "$CONDA_BASE/etc/profile.d/conda.sh"
+    CONDA_SETUP_DONE=yes
+fi
+
+########################################################################
+# HISTORY CONTROL
+########################################################################
+
+HISTCONTROL=ignoredups:erasedups
+shopt -s histappend
+PROMPT_COMMAND="history -n; history -w; history -c; history -r"
+
+########################################################################
+# PROMPT
+########################################################################
+
+# prompts:
+#     (>_<) (=^.^=) (-_-)
+#
+# colors:
+#     red   -> 31
+#     green -> 32
+#     blue  -> 34
+
+default_prompt='(>_<)'
+prompt_color=31
+
+export PS1='\[\033[00;${prompt_color}m\]${prompt}\[\033[00m\] '
+
+function set_conda_prompt {
+    if [ "${INITIAL_CONDA_ENV}" = "${CONDA_DEFAULT_ENV}" ]; then
+        prompt=${default_prompt}
+    else
+        prompt="(${CONDA_DEFAULT_ENV})"
+    fi
+}
+PROMPT_COMMAND=$PROMPT_COMMAND'; set_conda_prompt'
+
+########################################################################
+# TERMINAL TITLE
+########################################################################
+
+function terminal_title {
+    local title=${PWD/$HOME/'~'}
+    local IFS="/" 
+    local parts=($title)
+    local len=${#parts[@]}
+    if [ ${#title} -le 80 -o $len -le 5 ]; then
+        echo -n "$title"
+    else
+        echo -n "${parts[0]}"
+        echo -n "/${parts[1]}"
+        echo -n "/..."
+        echo -n "/${parts[len-3]}"
+        echo -n "/${parts[len-2]}"
+        echo -n "/${parts[len-1]}"
+    fi
+}
+
+case "$TERM" in xterm*|rxvt*)
+    PROMPT_COMMAND=$PROMPT_COMMAND'; echo -ne "\033]0;$(terminal_title)\007"' ;;
+esac
+
+if [ "$TMUX" ]; then
+    PROMPT_COMMAND=$PROMPT_COMMAND'; echo -ne "\033]2;$(terminal_title)\033\\"'
+fi
+
+########################################################################
+# BASH COMPLETION
+########################################################################
+
+for bash_completion_file in \
+    "$CONDA_PREFIX/etc/profile.d/bash_completion.sh" \
+    "/usr/local/etc/bash_completion" \
+    "/etc/bash_completion"
+do
+    if [ -f "$bash_completion_file" ]; then
+        . "$bash_completion_file"
+        break
+    fi
+done
+
+unset bash_completion_file
+
+########################################################################
+# ALIASES
+########################################################################
+
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+########################################################################
+#
+########################################################################
+
+# vi: ft=bash

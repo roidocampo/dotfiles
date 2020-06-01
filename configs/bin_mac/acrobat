@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec open -a "/Applications/Adobe Acrobat Reader DC.app" "$@"
