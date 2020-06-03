@@ -205,6 +205,7 @@ if [ -f "$HOME/.vim/bundle/vimpager/vimpager" ]; then
             \man
             return
         fi
+        export MANPATH="$CONDA_PREFIX/share/man:"
         IFS=$'\n' read -rd '' -a MANFILES <<<"$(\man -w "$@")"
         for MANFILE in "${MANFILES[@]}"; do
             env \
@@ -222,12 +223,23 @@ else
 fi
 
 ###########################################################################
+# which
+###########################################################################
+
+alias which='alias | /usr/bin/which --tty-only --read-alias --show-dot --show-tilde'
+
+###########################################################################
 # print path in a sane way
 ###########################################################################
 
 function path() {(
+    if [ -z "$1" ]; then
+        P=$PATH
+    else
+        P=$1
+    fi
     IFS=:
-    printf "%s\n" $PATH
+    printf "%s\n" $P
 )}
 
 ########################################################################

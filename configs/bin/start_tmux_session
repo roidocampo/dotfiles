@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Check if we are attached to a terminal
+
+if [ ! -t 0 ]; then
+    echo "* Error: stdin is not a terminal"
+    exec "$BASH" -i
+fi
+
 # Force a login shell (to get correct $PATH)
 
 if ! shopt -q login_shell; then
