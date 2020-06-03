@@ -25,6 +25,7 @@ CONDA_PACKAGES="\
     tmux \
     tree \
     vim \
+    which \
     wget \
 "
 

@@ -226,7 +226,7 @@ fi
 # which
 ###########################################################################
 
-alias which='alias | /usr/bin/which --tty-only --read-alias --show-dot --show-tilde'
+alias which='alias | \which --tty-only --read-alias --show-dot --show-tilde'
 
 ###########################################################################
 # print path in a sane way
