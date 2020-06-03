@@ -54,7 +54,9 @@ PROMPT_COMMAND=$PROMPT_COMMAND'; set_conda_prompt'
 ########################################################################
 
 function terminal_title {
-    local title=${PWD/$HOME/'~'}
+    local title=${PWD/\/data$HOME/'~'}
+    title=${title/\/data2$HOME/'~'}
+    title=${title/$HOME/'~'}
     local IFS="/" 
     local parts=($title)
     local len=${#parts[@]}
