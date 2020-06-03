@@ -29,13 +29,19 @@ set mousemodel=popup              "Right click gives a menu
 set nowrap                        "Do no wrap lines
 set nojoinspaces                  "Join command should not add 2 spaces after .
 set wildmenu                      "Nice menu for completing commands
-set spelllang=en_us               "Default dictionary
+set spelllang=en_us,math          "Default dictionary
 set confirm                       "Ask before quitting if there are changes
 set hidden                        "Allow `unsaved` buffers
 set completeopt=menuone,noselect  "More normal completions
 set guioptions-=r                 "No scrollbar on gui
 set scrolloff=1                   "Show one line above/below cursor
 set sidescrolloff=5               "Show 5 colomuns left/right of cursor
+"et number                        "Show line numbers
+"et signcolumn=number             "Show signs in number column
+"et foldcolumn=1                  "Show fold column
+set fillchars=fold:\              "Fill fold lines with spaces
+"et undofile                      "Persistent undo
+"et undodir=$HOME/.vim/vimundo    "Directory for persistent undo
 
 "########################################################################
 "########################################################################
@@ -68,6 +74,8 @@ call plug#begin('~/.vim/bundle')
     Plug 'christoomey/vim-tmux-navigator'
     Plug 'vim-utils/vim-man'
     Plug 'rkitover/vimpager'
+    Plug 'majutsushi/tagbar'
+    Plug 'mbbill/undotree'
 
     "Filetype plugins
     Plug 'hdima/python-syntax',                 { 'for': 'python' }
@@ -110,10 +118,14 @@ if has("mac")
   set t_ts=]1;
   set t_fs=
 endif
+
 if &term == "screen-256color"
   set t_ts=]2;
   set t_fs=\
 endif
+
+let &t_SI = "\e[5 q"
+let &t_EI = "\e[1 q"
 
 set titlestring=%t%(\ %M%)%(\ (%<%0.50{expand(\"%:p:~:h\")})%)%(\ %a%)\ -\ %{v:servername\ ?\ v:servername\ :\ \"VIM\"}
 
@@ -126,8 +138,38 @@ endif
 
 if !empty($BASE16_THEME)
     let base16colorspace=256
-    colorscheme base16-$BASE16_THEME
+    silent! colorscheme base16-$BASE16_THEME
 endif
+
+hi LineNr ctermbg=NONE
+hi Folded ctermbg=NONE 
+hi SignColumn ctermbg=NONE
+hi FoldColumn ctermbg=NONE ctermfg=NONE
+
+hi clear ALEErrorSign
+hi clear ALEWarningSign
+
+hi link ALEErrorSign ErrorMsg
+hi link ALEWarningSign WarningMsg
+
+let g:ale_sign_error = ' '
+let g:ale_sign_warning = ' '
+
+hi clear SpellBad
+hi clear SpellCap
+hi clear SpellRare
+hi clear SpellLocal
+
+hi SpellBad cterm=undercurl ctermfg=9
+hi SpellCap cterm=undercurl ctermfg=12
+hi SpellRare cterm=undercurl ctermfg=13
+hi SpellLocal cterm=undercurl ctermfg=14
+
+hi clear MatchParen
+
+hi MatchParen cterm=underline
+
+"highlight EndOfBuffer ctermfg=bg
 
 "########################################################################
 "########################################################################
@@ -149,6 +191,9 @@ imap <silent> <PageUp> <C-O><PageUp>
 if maparg('<C-L>', 'n') ==# ''
     nnoremap <silent> <C-L> :nohlsearch<CR><C-L>
 endif
+
+nmap <F8> :TagbarToggle<CR>
+nmap <F7> :UndotreeToggle<CR>
 
 "########################################################################
 "########################################################################

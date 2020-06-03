@@ -201,7 +201,11 @@ fi
 if [ -f "$HOME/.vim/bundle/vimpager/vimpager" ]; then
 
     function _man_vimpager() {(
-        IFS=$'\n' read -rd '' -a MANFILES <<<"$(man -w "$@")"
+        if [ -z "$*" ]; then
+            \man
+            return
+        fi
+        IFS=$'\n' read -rd '' -a MANFILES <<<"$(\man -w "$@")"
         for MANFILE in "${MANFILES[@]}"; do
             env \
                 PAGER="$HOME/.vim/bundle/vimpager/vimpager" \

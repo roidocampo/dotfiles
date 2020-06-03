@@ -9,9 +9,12 @@ CONDA_PACKAGES="\
     bash-completion \
     coreutils \
     curl \
+    ctags \
     findutils \
     gawk \
     git \
+    hunspell \
+    hunspell-en \
     htop \
     imagemagick \
     ipython \
@@ -152,7 +155,7 @@ link_dotfile() {
             fi
         fi
 
-        #backup_away "$LINK_FILE"
+        backup_away "$LINK_FILE"
         MSG="targed existed, backup created, and "
 
     else
@@ -161,8 +164,7 @@ link_dotfile() {
 
     fi
 
-    #mkdir -p "$(dirname "$LINK_FILE")"
-    #ln -s "$SOURCE_FILE" "$LINK_FILE"
+    ln -s "$SOURCE_FILE" "$LINK_FILE"
     box_row 20 32 "$1" "${MSG}link configured"
 
 }

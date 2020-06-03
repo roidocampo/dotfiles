@@ -11,5 +11,6 @@ configs/vim/autoload/plug.vim
 configs/vim/bundle/*
 !configs/vim/bundle/.gitkeep
 configs/vim/spell/*
+!configs/vim/spell/math*
 configs/vim/swap/*
 !configs/vim/swap/.gitkeep

@@ -36,11 +36,11 @@ set iskeyword=@
 
 "highlight Normal ctermfg=20
 
-highlight SpellBad ctermfg=9 ctermbg=NONE cterm=NONE
-" highlight SpellBad ctermfg=9 ctermbg=NONE cterm=undercurl
-highlight SpellCap ctermfg=4 ctermbg=NONE cterm=NONE
-highlight SpellRare ctermfg=4 ctermbg=NONE cterm=NONE
-highlight SpellLocal ctermfg=202 ctermbg=NONE cterm=NONE
+" highlight SpellBad ctermfg=9 ctermbg=NONE cterm=NONE
+" " highlight SpellBad ctermfg=9 ctermbg=NONE cterm=undercurl
+" highlight SpellCap ctermfg=4 ctermbg=NONE cterm=NONE
+" highlight SpellRare ctermfg=4 ctermbg=NONE cterm=NONE
+" highlight SpellLocal ctermfg=202 ctermbg=NONE cterm=NONE
 
 highlight C_GRAY ctermfg=8
 highlight C_GREEN ctermfg=2
