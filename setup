@@ -19,7 +19,9 @@ CONDA_PACKAGES="\
     imagemagick \
     ipython \
     make \
+    nodejs \
     python \
+    tar \
     tmux \
     tree \
     vim \
