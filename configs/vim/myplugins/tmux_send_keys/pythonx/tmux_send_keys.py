@@ -28,11 +28,11 @@ def init_target_pane():
         '-d', '0',
         "display -p '%%'"
     ])
-    target_pane = "%" + o3.strip()
+    target_pane = b"%" + o3.strip()
     call(['tmux', 'set-option', 'display-time', '750'])
     call(['tmux', 'display', ''])
     call(['tmux', 'select-pane', '-t', current_pane])
-    if target_pane == "%":
+    if target_pane == b"%":
         target_pane = default_target_pane
     if current_pane == target_pane:
         target_pane = None

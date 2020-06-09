@@ -76,6 +76,7 @@ call plug#begin('~/.vim/bundle')
     Plug 'rkitover/vimpager'
     Plug 'majutsushi/tagbar'
     Plug 'mbbill/undotree'
+    Plug 'chrisbra/unicode.vim'
 
     "Filetype plugins
     Plug 'hdima/python-syntax',                 { 'for': 'python' }
@@ -102,6 +103,7 @@ call plug#begin('~/.vim/bundle')
     endif
     Plug '~/.vim/myplugins/vert_help', { 'for': 'help' }
     Plug '~/.vim/myplugins/singular',  { 'for': 'singular' }
+    Plug '~/.vim/myplugins/inb',       { 'for': 'inb' }
     Plug '~/.vim/myplugins/css_align', { 'for': ['css', 'html', 'bib', 'php'] }
 
 call plug#end()
@@ -139,6 +141,9 @@ endif
 if !empty($BASE16_THEME)
     let base16colorspace=256
     silent! colorscheme base16-$BASE16_THEME
+    if ($BASE16_THEME == "nord")
+        hi Comment ctermfg=17
+    endif
 endif
 
 hi LineNr ctermbg=NONE
