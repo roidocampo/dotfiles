@@ -547,7 +547,12 @@ class NbViewer(FileViewer):
         self.run_js(js)
 
     def proc_md(self, md):
-        out = markdown.markdown(md)
+        try:
+            mdp = self._mdp
+        except AttributeError:
+            mdp = self._mdp = markdown.Markdown() #extensions=['mdx_math'])
+        out = mdp.convert(md.replace('\\', '\\\\'))
+        print(out)
         return out
 
     def proc_code(self, lexer, code):
@@ -1659,6 +1664,8 @@ nb_head_js = r"""function update_cells(data) {
         }
     }
 
+    MathJax.typeset();
+
 };"""
 
 ########################################################################
@@ -1673,6 +1680,10 @@ nb_head_html=rf"""<!doctype html>
 {pygments_css}
 {nb_css}
 </style>
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+</script>
 <script>
 {nb_head_js}
 </script>
