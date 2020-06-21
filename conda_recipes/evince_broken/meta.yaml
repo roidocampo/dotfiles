@@ -1,0 +1,30 @@
+package:
+  name: evince
+  version: 3.36.5
+
+source:
+  fn: evince-3.36.5.tar.xz
+  url: https://download.gnome.org/sources/evince/3.36/evince-3.36.5.tar.xz
+  sha256: 6f0dd6e30639eb620f201a6ae40f21c4b78c030f0d6437f9e309f7240195e97c 
+
+requirements:
+  build:
+    - meson
+    - ninja
+    - gtk3
+    - djvulibre
+    - poppler
+    - ghostscript
+    - adwaita-icon-theme
+    - icu
+  run:
+    - gtk3
+    - djvulibre
+    - poppler
+    - ghostscript
+    - adwaita-icon-theme
+    - icu
+
+about:
+  home: https://wiki.gnome.org/Apps/Evince
+  license: GPLv2

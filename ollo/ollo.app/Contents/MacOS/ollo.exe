@@ -1,0 +1,42 @@
+#!/bin/bash
+
+PYTHON_BINARY=$HOME/opt/miniconda3/envs/env-gtk/bin/python
+PYTHON_SCRIPT=ollo.py
+
+exec 1> ~/.ollo_errors.log
+exec 2>&1
+
+true_path() {(
+    ORIGINAL_FILE=$1
+    TARGET_FILE=$1
+
+    if ! cd "$(dirname "$TARGET_FILE")"; then
+        echo "$ORIGINAL_FILE"
+        return 1
+    fi
+    TARGET_FILE=$(basename "$TARGET_FILE")
+
+    # Iterate down a (possible) chain of symlinks
+    while [ -L "$TARGET_FILE" ]; do
+        TARGET_FILE=$(readlink "$TARGET_FILE")
+        if ! cd "$(dirname "$TARGET_FILE")"; then
+            echo "$ORIGINAL_FILE"
+            return 1
+        fi
+        TARGET_FILE=$(basename "$TARGET_FILE")
+    done
+
+    # Compute the canonicalized name by finding the physical path 
+    # for the directory we're in and appending the target file.
+    PHYS_DIR=$(pwd -P)
+    RESULT=$PHYS_DIR/$TARGET_FILE
+    echo "$RESULT"
+)}
+
+SCRIPT_PATH=$(true_path "$0")
+BIN_DIR=$(dirname "$SCRIPT_PATH")
+CONTENTS_DIR=$(dirname "$BIN_DIR")
+RESOURCES_DIR=$CONTENTS_DIR/Resources
+FULL_PYTHON_SCRIPT=$RESOURCES_DIR/$PYTHON_SCRIPT
+
+exec "$PYTHON_BINARY" "$FULL_PYTHON_SCRIPT"

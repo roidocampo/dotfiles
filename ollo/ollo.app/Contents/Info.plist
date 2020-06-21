@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleName</key>
+    <string>ollo</string>
+    <key>CFBundleDisplayName</key>
+    <string>ollo</string>
+    <key>CFBundleExecutable</key>
+    <string>ollo.exe</string>
+    <key>CFBundleIdentifier</key>
+    <string>xyz.docampo.ollo</string>
+
+    <key>CFBundleIconFile</key>
+    <string>ollo.icns</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+
+    <key>CFBundleDocumentTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleTypeName</key>
+        <string>PDF</string>
+        <key>CFBundleTypeRole</key>
+        <string>Viewer</string>
+        <key>LSHandlerRank</key>
+        <string>Default</string>
+        <key>LSItemContentTypes</key>
+        <array>
+          <string>com.adobe.pdf</string>
+        </array>
+      </dict>
+      <dict>
+        <key>CFBundleTypeName</key>
+        <string>DjVu</string>
+        <key>CFBundleTypeRole</key>
+        <string>Viewer</string>
+        <key>LSHandlerRank</key>
+        <string>Default</string>
+        <key>CFBundleTypeExtensions</key>
+        <array>
+          <string>djvu</string>
+        </array>
+        <key>CFBundleTypeMIMETypes</key>
+        <array>
+          <string>image/vnd.djvu</string>
+          <string>image/x.djvu</string>
+        </array>
+      </dict>
+    </array>
+  </dict>
+</plist>

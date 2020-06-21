@@ -1,33 +1,45 @@
 #!/bin/bash
 
 ########################################################################
-# default conda packages
+# conda package lists
 ########################################################################
 
-CONDA_PACKAGES="\
-    bash \
-    bash-completion \
-    coreutils \
-    curl \
-    ctags \
-    findutils \
-    gawk \
-    git \
-    hunspell \
-    hunspell-en \
-    htop \
-    imagemagick \
-    ipython \
-    make \
-    nodejs \
-    python \
-    tar \
-    tmux \
-    tree \
-    vim \
-    which \
-    wget \
-"
+CONDA_PACKAGES=(
+    bash
+    bash-completion
+    coreutils
+    curl
+    ctags
+    c-compiler
+    findutils
+    gawk
+    git
+    hunspell
+    hunspell-en
+    htop
+    imagemagick
+    ipython
+    make
+    nodejs
+    python
+    tar
+    tmux
+    tree
+    vim
+    which
+    wget
+)
+
+GTK_PACKAGES=(
+    gtk3
+    pygobject
+)
+
+########################################################################
+# conda base
+########################################################################
+
+CONDA_BASE=$HOME/opt/miniconda3
 
 ########################################################################
 # show_help
@@ -35,6 +47,7 @@ CONDA_PACKAGES="\
 
 show_help() {
 
+    UNAME_KERNEL=$(uname)
     box_start "DOTFILES"
     box_row 16 35 \
         "./setup dotfiles" "  ::  setup configuration files in \$HOME"
@@ -44,6 +57,9 @@ show_help() {
         "./setup jupyter"  "  ::  setup jupyter environment in conda"
     box_row 16 35 \
         "./setup sage"     "  ::  setup sage environment in conda"
+    [ "X$UNAME_KERNEL" = "XDarwin" ] && \
+    box_row 16 35 \
+        "./setup gtk"      "  ::  setup gtk environment in conda"
     box_row 16 35 \
         "./setup help"     "  ::  print this help"
     box_end
@@ -223,8 +239,6 @@ backup_away() {
 
 setup_conda() {
 
-    CONDA_BASE=$HOME/opt/miniconda3
-
     box_start "CONDA SETUP"
 
     if [ -e "$CONDA_BASE" ]; then
@@ -290,8 +304,7 @@ setup_conda() {
     box_row 1 33 "*" "Creating conda environment \`env0\`"
     box_end
 
-    # shellcheck disable=SC2086
-    conda create --name env0 $CONDA_PACKAGES
+    conda create --name env0 "${CONDA_PACKAGES[@]}"
 
     printf '\n'
 
@@ -303,6 +316,97 @@ setup_conda() {
     box_row 1 33 "*" "Done!"
     box_end
 
+}
+
+########################################################################
+# check if conda is available
+########################################################################
+
+conda_exists() {
+    conda >/dev/null 2>&1
+}
+
+########################################################################
+# get conda environment list
+########################################################################
+
+conda_envs() {(
+    IFS=$'\n' read -d '' -r -a LINES <<<"$(conda env list)"
+    for LINE in "${LINES[@]}"; do
+        read -r -a WORDS <<< "$LINE"
+        word="${WORDS[0]}"
+        if [ "X$word" != "X#" ]; then
+            echo "$word"
+        fi
+    done
+)}
+
+########################################################################
+# check if conda environment exists
+########################################################################
+
+conda_env_exists() {
+    ENV_NAME="$1"
+    for ENV in $(conda_envs); do
+        if [ "X$ENV" = "X$ENV_NAME" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+########################################################################
+# setup_conda_env
+########################################################################
+
+setup_conda_env() {
+
+    local BOX_TITLE="$1"
+    shift
+    local ENV_NAME="$1"
+    shift
+    local ENV_PACKAGES=("$@")
+
+    box_start "$BOX_TITLE SETUP"
+    box_row 1 33 "*" "Checking current setup"
+
+    if ! conda_exists; then
+        box_row 1 31 "!" "Conda not setup (please install conda first)"
+        box_end
+        return
+    fi
+
+    if conda_env_exists "$ENV_NAME"; then
+        box_row 1 31 "!" "Conda environment \`$ENV_NAME\` already exists"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Loading and activating conda"
+
+    # shellcheck disable=SC1090
+    . "$CONDA_BASE/etc/profile.d/conda.sh"
+    conda activate base
+
+    box_row 1 33 "*" "Creating and activating conda environment \`$ENV_NAME\`"
+    box_end
+
+    conda create --name "$ENV_NAME" "${CONDA_PACKAGES[@]}" "${ENV_PACKAGES[@]}"
+
+    printf '\n'
+
+    box_start "CONTINUING $BOX_TITLE SETUP"
+    box_row 1 33 "*" "Done!"
+    box_end
+
+}
+
+########################################################################
+# setup_gtk
+########################################################################
+
+setup_gtk() {
+    setup_conda_env "GTK" "env-gtk" "${GTK_PACKAGES[@]}"
 }
 
 ########################################################################
@@ -329,6 +433,7 @@ main() {
             dotfiles) setup_dotfiles; exit ;;
             conda) setup_conda; exit ;;
             jupyter|sage) not_implemented; exit ;;
+            gtk) setup_gtk; exit ;;
         esac
     fi
 

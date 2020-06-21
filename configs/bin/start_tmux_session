@@ -46,6 +46,7 @@ fi
 if hash base16 2>/dev/null; then
     echo "* configuring terminal colors"
     eval "$(base16 load)"
+    sleep 1
 fi
 
 # Check if tmux is installed

@@ -1,0 +1,24 @@
+package:
+  name: djvulibre
+  version: 3.5.27
+
+source:
+  fn: djvulibre-3.5.27.tar.gz
+  url: http://downloads.sourceforge.net/djvu/djvulibre-3.5.27.tar.gz
+  md5: aa4ed331f669f5a72e3c0d7f9196c4e6
+
+requirements:
+  build:
+    - zlib
+    - jpeg
+    - libtiff
+    - libpng
+  run:
+    - zlib
+    - jpeg
+    - libtiff
+    - libpng
+
+about:
+  home: http://djvu.sourceforge.net/
+  license: GPLv2

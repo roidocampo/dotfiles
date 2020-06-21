@@ -11,6 +11,7 @@ import pygments
 import pygments.lexers
 import pygments.formatters
 import queue
+import shutil
 import socketserver
 import sys
 import threading
@@ -120,16 +121,29 @@ def http_server(path, msg_queue):
 ########################################################################
 
 def io_worker(msg_queue, ctrl_queue):
+    print("\033[9999;1H", end="")
+    status_msg = "ready"
     i = 0
     while True:
+        print_status_msg("ready")
         try:
-            msg = input()
+            msg = input("> ")
         except:
             print()
             ctrl_queue.put("Quit")
             break
         msg_queue.put(f"{msg}")
         i += 1
+
+########################################################################
+# print_msg
+########################################################################
+
+def print_status_msg(status_msg):
+    status_msg = status_msg[:15]
+    ncols = shutil.get_terminal_size((80,20)).columns
+    pad = ncols-16
+    print(f"\0337\r\033[{pad}C{status_msg:>15}\0338", end="")
 
 ########################################################################
 # FloatingWindow
@@ -140,7 +154,6 @@ class FloatingWindow:
     @classmethod
     def worker(cls, io_msg_queue, win_msg_queue):
         qapp = QApplication([])
-        print("here")
         fw = cls(qapp, io_msg_queue, win_msg_queue)
         exit_code = fw.exec_()
         del fw
@@ -175,8 +188,8 @@ class FloatingWindow:
             Qt.CustomizeWindowHint
             | Qt.WindowStaysOnTopHint
         )
-        window.resize(w-10,h-48)
-        window.move(w+5,m+26)
+        window.resize(w-10,h-45)
+        window.move(w+5,m)#+26)
         window.show()
 
     def _init_io_timer_(self):
@@ -552,7 +565,7 @@ class NbViewer(FileViewer):
         except AttributeError:
             mdp = self._mdp = markdown.Markdown() #extensions=['mdx_math'])
         out = mdp.convert(md.replace('\\', '\\\\'))
-        print(out)
+        print_status_msg("md")
         return out
 
     def proc_code(self, lexer, code):
