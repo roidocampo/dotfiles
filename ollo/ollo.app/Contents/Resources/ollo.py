@@ -12,6 +12,7 @@ from collections import namedtuple
 from pathlib import Path
 
 import djvu.decode as djvud
+import djvu.sexpr as djvue
 import fitz
 
 from PyQt5.QtCore import *
@@ -39,6 +40,178 @@ if __debug__:
         print(f"[{stamp}] [{nline}]{infos}")
 
 ########################################################################
+# FoundText(QWidget):
+########################################################################
+
+class FoundText(QWidget):
+
+    def __init__(self, needle, page, rel_rect):
+        super().__init__(parent=page)
+        self.setCursor(Qt.PointingHandCursor)
+        self.active = False
+        self.needle = needle
+        self.page = page
+        self.rel_rect = rel_rect
+        self.recompute_size()
+        self._next = None
+        self._previous = None
+
+    def recompute_size(self):
+        self.setGeometry(self.abs_rect())
+
+    def abs_rect(self):
+        (x0, y0, x1, y1) = self.rel_rect
+        return QRect(
+            QPoint(
+                int(x0 * self.page.canvas_width),
+                int(y0 * self.page.canvas_height),
+            ),
+            QPoint(
+                int(x1 * self.page.canvas_width),
+                int(y1 * self.page.canvas_height),
+            ),
+        )
+
+    def paintEvent(self, e):
+        painter = QPainter(self)
+        rect = QRect(0, 0, painter.device().width(), painter.device().height())
+        painter.fillRect(rect, QColor("#44ffcccc"))
+        pen = QPen(QColor("#ff0000"))
+        if self.active:
+            pen.setWidth(3)
+        painter.setPen(pen)
+        painter.drawRect(rect)
+        #painter.fillRect(rect, QColor("#4499cccc"))
+
+    def trigger_next_page_find(self):
+        page = self.page
+        pages = self.page.document_view.pages
+        p = pages.index(page) + 1
+        if p >= len(pages):
+            return
+        page = pages[p]
+        page._find(self.needle)
+
+    def next(self):
+        if self._next is None:
+            page = self.page
+            i = page.found_items.index(self)
+            if i < len(page.found_items) - 1:
+                i += 1
+            else:
+                i = 0
+                pages = self.page.document_view.pages
+                p = pages.index(page) + 1
+                while True:
+                    if p >= len(pages):
+                        p = 0
+                    page = pages[p]
+                    page._find(self.needle)
+                    if page.found_items:
+                        break
+                    p += 1
+            self._next = page.found_items[i]
+        return self._next
+
+    def previous(self):
+        if self._previous is None:
+            page = self.page
+            i = page.found_items.index(self)
+            if i > 0:
+                i -= 1
+            else:
+                i = -1
+                pages = self.page.document_view.pages
+                p = pages.index(page) - 1
+                while True:
+                    page = pages[p]
+                    page._find(self.needle)
+                    if page.found_items:
+                        break
+                    p -= 1
+            self._previous = page.found_items[i]
+        return self._previous
+
+
+########################################################################
+# DocLink
+########################################################################
+
+class DocLink(QWidget):
+
+    def __init__(self, page, rel_rect, *link_data):
+        super().__init__(parent=page)
+        self.setCursor(Qt.PointingHandCursor)
+        self.active = False
+        self.page = page
+        self.rel_rect = rel_rect
+        self._init_link_(link_data)
+        self.recompute_size()
+
+    def _init_link_(self, link_data):
+        self.link_data = link_data
+
+    def recompute_size(self):
+        self.setGeometry(self.abs_rect())
+
+    def abs_rect(self):
+        (x0, y0, x1, y1) = self.rel_rect
+        return QRect(
+            QPoint(
+                int(x0 * self.page.canvas_width),
+                int(y0 * self.page.canvas_height),
+            ),
+            QPoint(
+                int(x1 * self.page.canvas_width),
+                int(y1 * self.page.canvas_height),
+            ),
+        )
+
+    def paintEvent(self, e):
+        if not self.active:
+            return
+        painter = QPainter(self)
+        rect = QRect(0, 0, painter.device().width(), painter.device().height())
+        painter.fillRect(rect, QColor("#4499cccc"))
+
+    def enterEvent(self, e):
+        self.active = True
+        self.update()
+
+    def leaveEvent(self, e):
+        self.active = False
+        self.update()
+
+    def mousePressEvent(self, e):
+        self.handle_link(*self.link_data)
+
+    def handle_link(self, *link_data):
+        pass
+
+########################################################################
+# ExternalLink
+########################################################################
+
+class ExternalLink(DocLink):
+
+    def handle_link(self, url):
+        QDesktopServices.openUrl(QUrl(url))
+
+########################################################################
+# InternalLink
+########################################################################
+
+class InternalLink(DocLink):
+
+    def handle_link(self, target_page_num, x, y):
+        try:
+            target_page = self.page.document_view.pages[target_page_num]
+        except:
+            return
+        else:
+            target_page.go_to_internal_location(x, y)
+
+########################################################################
 # EmptyPage
 ########################################################################
 
@@ -51,25 +224,45 @@ class EmptyPage(QWidget):
         self.document_view = document_view
         self.document = document_view.document
         self.page_num = page_num
-        self.page_ratio = 11/8.5
+        self.page_ratio = 2*11/8.5
         self.base_canvas_width = 1100
+        self.internal_width = self.base_canvas_width
+        self.internal_height = self.page_ratio * self.base_canvas_width
         self.zoom = 1.
-        self.recompute_size()
+        self.links = []
+        self.found_items = []
+        self.last_search = ""
+        self.page_loaded = False
         self._init_page_()
+        self.recompute_size(False)
 
     def _init_page_(self):
-        label = QLabel(f"# {self.page_num}", parent=self)
-        label.move(3,3)
+        pass
 
     def set_zoom(self, new_zoom):
         if self.zoom != new_zoom:
             self.zoom = new_zoom
         self.recompute_size()
 
-    def recompute_size(self):
+    def recompute_size(self, preserve_relative_position=True):
+        if self.document_view.last_scroll_delta >= 0:
+            preserve_relative_position = False
+        if preserve_relative_position:
+            s0 = self.document_view.verticalScrollBar().value()
+            h0 = self.canvas_height
+            y = self.pos().y()
+            r = s0 - y - h0
         self.canvas_width = int(self.base_canvas_width * self.zoom)
         self.canvas_height = int(self.base_canvas_width * self.page_ratio * self.zoom)
         self.setFixedSize(self.canvas_width, self.canvas_height)
+        for l in self.links:
+            l.recompute_size()
+        for it in self.found_items:
+            it.recompute_size()
+        if preserve_relative_position:
+            if (h1 := self.canvas_height) != h0:
+                s1 = y + h1 + r
+                self.document_view.verticalScrollBar().setValue(s1)
 
     def get_image(self):
         try:
@@ -83,16 +276,66 @@ class EmptyPage(QWidget):
         return None
 
     def paintEvent(self, e):
+        if not self.page_loaded:
+            self._load_page()
         painter = QPainter(self)
+        painter.setRenderHints(
+            QPainter.Antialiasing
+            | QPainter.SmoothPixmapTransform
+        )
         rect = QRect(0, 0, painter.device().width(), painter.device().height())
         painter.fillRect(rect, Qt.white)
-        self.paint_page(painter)
+        self.paint_page(painter, rect)
         painter.drawRect(rect)
 
-    def paint_page(self, painter):
+    def paint_page(self, painter, rect):
         img = self.get_image()
         if img is not None:
-            painter.drawImage(0,0,img)
+            painter.drawImage(rect,img)
+
+    def _load_page(self):
+        self.load_page()
+        self.load_links()
+        for l in self.links:
+            l.show()
+        self.recompute_size()
+        self.page_loaded = True
+
+    def load_page(self):
+        label = QLabel(f"# {self.page_num+1}/{self.document.num_pages}", parent=self)
+        label.move(3,3)
+        label.show()
+
+    def load_links(self):
+        return
+
+    def go_to_internal_location(self, int_x, int_y):
+        if not self.page_loaded:
+            self._load_page()
+        dy = int_y / self.internal_height * self.canvas_height / self.zoom
+        self.document_view.go_to(self.page_num, dy)
+
+    def _find(self, needle = ""):
+        if self.last_search == needle:
+            return
+        if not self.page_loaded:
+            self._load_page()
+        self.clear_found_items()
+        if needle != "":
+            self.find(needle)
+            for it in self.found_items:
+                it.show()
+            self.last_search = needle
+        self.recompute_size()
+
+    def clear_found_items(self):
+        for it in self.found_items:
+            it.setParent(None)
+        self.found_items = []
+        self.last_search = ""
+
+    def find(self, needle):
+        pass
 
 ########################################################################
 # EmptyDocucment
@@ -122,6 +365,19 @@ class EmptyDocucment:
         return self.images[page_num, zoom]
 
 ########################################################################
+# event_filter
+########################################################################
+
+class event_filter(QObject):
+
+    def __init__(self, filter_function):
+        super().__init__()
+        self.filter_function = filter_function
+
+    def eventFilter(self, obj, event):
+        return self.filter_function(obj, event)
+
+########################################################################
 # DocumentView
 ########################################################################
 
@@ -133,17 +389,37 @@ class DocumentView(QScrollArea):
         super().__init__(*args, **kws)
         self.file_name = file_name
         if __debug__: deb(file_name=file_name)
+        self.gap = gap = 12
+        self.history = [(0,-1.0*gap)]
+        self.history_pos = 0
         self.zoom = 1.
         self._init_document_()
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.horizontalScrollBar().installEventFilter(self.hbar_filter)
         self.setAlignment(Qt.AlignCenter)
         self.container = container = QWidget()
         self.layout = QVBoxLayout(container)
+        self.layout.setContentsMargins(gap, gap, gap, gap)
+        self.layout.setSpacing(gap)
         self.layout.setSizeConstraint(QLayout.SetFixedSize)
         container.setLayout(self.layout)
         self.setWidget(container)
+        self._y = 0
+        self.last_scroll_delta = 0
+        self.verticalScrollBar().valueChanged.connect(self.record_scroll)
+        self.last_search = ""
+        self.current_found_item = None
         self._init_pages_()
+
+    @event_filter
+    def hbar_filter(obj, event):
+        if event.type() != QEvent.Wheel:
+            return False
+        elif event.modifiers() == Qt.NoModifier:
+            return True
+        else:
+            return False
 
     def _init_document_(self):
         self.document = self.document_class(self.file_name)
@@ -157,6 +433,10 @@ class DocumentView(QScrollArea):
             self.pages.append(p)
             self.layout.addWidget(p)
 
+    def record_scroll(self, new_y):
+        self.last_scroll_delta = new_y - self._y
+        self._y = new_y
+
     def keyPressEvent(self, e):
         k = e.key()
         if k == Qt.Key_Minus:
@@ -165,26 +445,216 @@ class DocumentView(QScrollArea):
             return self.zoom_in()
         if k == Qt.Key_0:
             return self.reset_zoom()
+        if k == Qt.Key_G:
+            return self.go_to_page_dialog()
+        if k == Qt.Key_F:
+            return self.find_dialog()
+        if k == Qt.Key_N:
+            return self.find_next()
+        if k == Qt.Key_M:
+            return self.find_previous()
+        if k == Qt.Key_BracketLeft:
+            return self.go_back()
+        if k == Qt.Key_BracketRight:
+            return self.go_forward()
         super().keyPressEvent(e)
 
     def zoom_out(self):
+        self.set_zoom(zoom_delta=-0.1)
+        return
         if self.zoom > 0.5:
             self.zoom -= 0.1
             self.zoom_pages()
 
     def zoom_in(self):
+        self.set_zoom(zoom_delta=0.1)
+        return
         if self.zoom < 5:
             self.zoom += 0.1
             self.zoom_pages()
 
     def reset_zoom(self):
+        self.set_zoom(new_zoom=1.)
+        return
         if self.zoom != 1.:
             self.zoom = 1.
             self.zoom_pages()
 
-    def zoom_pages(self):
+    def set_zoom(self, new_zoom=None, zoom_delta=0.):
+        if new_zoom is None:
+            new_zoom = self.zoom + zoom_delta
+        if not (0.5 <= new_zoom <= 5):
+            return
+        if new_zoom == self.zoom:
+            return
+        n, dy = self.get_current_rel_pos(window_point="center")
+        h = self.get_current_rel_h_scroll()
+        self.zoom = new_zoom
         for p in self.pages:
             p.set_zoom(self.zoom)
+        def _for_later():
+            self.go_to(n, dy, save_current_position=False, window_point="center")
+            self.set_rel_h_scroll(h)
+        QTimer.singleShot(0, _for_later)
+
+    @property
+    def current_page_number(self):
+        for page_num, page in enumerate(self.pages):
+            if not page.visibleRegion().isEmpty():
+                return page_num
+        return 0
+
+    def go_to_page_dialog(self):
+        self.releaseKeyboard()
+        cur_page_num = self.current_page_number
+        new_page_num, ok = QInputDialog.getInt(
+            self,
+            "Go to page",
+            "Page",
+            value=cur_page_num+1,
+            min=1,
+            max=self.document.num_pages,
+        )
+        self.grabKeyboard()
+        if ok:
+            new_page_num -= 1
+            if new_page_num != cur_page_num:
+                self.go_to(new_page_num)
+
+    def get_current_rel_h_scroll(self):
+        x = self.horizontalScrollBar().value()
+        m = self.horizontalScrollBar().maximum()
+        if not m:
+            return 0.5
+        return x/m
+
+    def set_rel_h_scroll(self, r):
+        m = self.horizontalScrollBar().maximum()
+        self.horizontalScrollBar().setValue(int(r*m))
+
+    def get_current_rel_pos(self, window_point="north"):
+        y = self.verticalScrollBar().value()
+        if window_point == "north":
+            pass
+        elif window_point == "center":
+            h = self.verticalScrollBar().pageStep()
+            y += int(h/2)
+        elif window_point == "south":
+            h = self.verticalScrollBar().pageStep()
+            y += h
+        else:
+            pass
+        for page_num, page in enumerate(self.pages):
+            b = page.geometry().bottom()
+            if y <= b:
+                break
+        dy = (y-page.y())/self.zoom
+        return page_num, dy
+
+
+    def go_to(
+            self,
+            page_num=None,
+            dy=None,
+            save_current_position=True,
+            window_point="north",
+    ):
+        pos0 = self.get_current_rel_pos(window_point)
+        if dy is None:
+            dy = -self.gap/self.zoom
+        pos = page_num, dy
+        if pos0 == pos:
+            return
+        try:
+            page = self.pages[page_num]
+        except:
+            return
+        if save_current_position:
+            if pos0 != self.history[self.history_pos]:
+                self.history_pos += 1
+                self.history[self.history_pos:] = [pos0]
+            self.history_pos += 1
+            self.history[self.history_pos:] = [pos]
+        y = page.pos().y()
+        if window_point == "north":
+            v = int(y + dy * self.zoom)
+        elif window_point == "center":
+            h = self.verticalScrollBar().pageStep()
+            v = int(y + dy * self.zoom) - int(h/2)
+        elif window_point == "south":
+            h = self.verticalScrollBar().pageStep()
+            v = int(y + dy * self.zoom) - h
+        else:
+            v = int(y + dy * self.zoom)
+        self.verticalScrollBar().setValue(v)
+        pos0 = self.get_current_rel_pos(window_point)
+
+    def go_back(self):
+        if self.history_pos > 0:
+            self.history_pos -= 1
+            n, y = self.history[self.history_pos]
+            self.go_to(n, y, save_current_position=False)
+
+    def go_forward(self):
+        if self.history_pos < len(self.history)-1:
+            self.history_pos += 1
+            n, y = self.history[self.history_pos]
+            self.go_to(n, y, save_current_position=False)
+
+    def find_dialog(self):
+        self.releaseKeyboard()
+        needle, ok = QInputDialog.getText(
+            self,
+            "Find",
+            "Needle:",
+            text=self.last_search,
+        )
+        self.grabKeyboard()
+        if ok:
+            self.last_search = needle
+            self.find_first(needle)
+
+    def find_first(self, needle):
+        p = p0 = self.current_page_number
+        while True:
+            page = self.pages[p]
+            page._find(needle)
+            if page.found_items:
+                break
+            p += 1
+            if p >= len(self.pages):
+                p = 0
+            if p == p0:
+                self.current_found_item = None
+                return
+        it = page.found_items[0]
+        self.current_found_item = it
+        it.trigger_next_page_find()
+        it.active = True
+        self.ensureWidgetVisible(it)
+        it.page.update()
+
+    def find_next(self):
+        if (it := self.current_found_item):
+            n = it.next()
+            self.current_found_item = n
+            it.active = False
+            n.active = True
+            def _for_later():
+                self.ensureWidgetVisible(n)
+                n.page.update()
+            QTimer.singleShot(0, _for_later)
+
+    def find_previous(self):
+        if (it := self.current_found_item):
+            n = it.previous()
+            self.current_found_item = n
+            it.active = False
+            n.active = True
+            def _for_later():
+                self.ensureWidgetVisible(n)
+                n.page.update()
+            QTimer.singleShot(0, _for_later)
 
 ########################################################################
 # PdfPage
@@ -192,25 +662,58 @@ class DocumentView(QScrollArea):
 
 class PdfPage(EmptyPage):
 
-    def _init_page_(self):
-        self._pdfpage = None
-
-    @property
-    def pdfpage(self):
-        if self._pdfpage is None:
-            p = self.document.pdfdoc[self.page_num]
-            self._pdfpage = d = p.getDisplayList()
-            self.page_ratio = d.rect.height / d.rect.width
-            self.recompute_size()
-        return self._pdfpage
+    def load_page(self):
+        self.pdf_page = self.document.pdfdoc[self.page_num]
+        self.display_list = d = self.pdf_page.getDisplayList()
+        self.internal_height = d.rect.height
+        self.internal_width = d.rect.width
+        self.page_ratio = d.rect.height / d.rect.width
+        self.text_page = None
 
     def generate_image(self):
-        r = self.canvas_width / self.pdfpage.rect.width
+        r = 2*self.canvas_width / self.display_list.rect.width
         m = fitz.Matrix(r, r)
-        pix = self.pdfpage.getPixmap(matrix=m)
+        pix = self.display_list.getPixmap(matrix=m)
         fmt = QImage.Format_RGBA8888 if pix.alpha else QImage.Format_RGB888
         img = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
         return img
+
+    def load_links(self):
+        for link in self.pdf_page.links():
+            k = link['kind']
+            if k == fitz.LINK_GOTO:
+                if (target_page_num := link['page']) == -1:
+                    continue
+                link_class = InternalLink
+                target_point = link['to']
+                link_data = (target_page_num, target_point.x, target_point.y)
+            elif k == fitz.LINK_URI:
+                link_class = ExternalLink
+                link_data = (link['uri'],)
+            else:
+                continue
+            r = link['from']
+            rel_rect = (
+                r.x0 / self.display_list.rect.width,
+                r.y0 / self.display_list.rect.height,
+                r.x1 / self.display_list.rect.width,
+                r.y1 / self.display_list.rect.height,
+            )
+            self.links.append(link_class(self, rel_rect, *link_data))
+
+    def find(self, needle):
+        if self.text_page is None:
+            self.text_page = self.display_list.getTextPage()
+        rlist = self.text_page.search(needle, quads=False) 
+        for r in rlist:
+            rel_rect = (
+                r.x0 / self.display_list.rect.width,
+                r.y0 / self.display_list.rect.height,
+                r.x1 / self.display_list.rect.width,
+                r.y1 / self.display_list.rect.height,
+            )
+            self.found_items.append(FoundText(needle, self, rel_rect))
+
 
 ########################################################################
 # PdfDocument
@@ -237,24 +740,20 @@ class PdfView(DocumentView):
 
 class DjvuPage(EmptyPage):
 
-    def _init_page_(self):
-        self._djvupage = None
-
-    @property
-    def djvupage(self):
-        if self._djvupage is None:
-            p = self.document.djvudoc.pages[self.page_num]
-            pj = p.decode(wait = True)
-            self.page_ratio = pj.height / pj.width
-            self.recompute_size()
-            self._djvupage = pj
-        return self._djvupage
+    def load_page(self):
+        self.djvupage = p = self.document.djvudoc.pages[self.page_num]
+        pj = p.decode(wait = True)
+        self.internal_height = pj.height
+        self.internal_width = pj.width
+        self.page_ratio = pj.height / pj.width
+        self.recompute_size()
+        self.djvupagejob = pj
 
     def generate_image(self):
         dpf = djvud.PixelFormatRgbMask(0xFF0000, 0xFF00, 0xFF, 0xFF000000, bpp=32)
         dpf.rows_top_to_bottom = 1
         dpf.y_top_to_bottom = 0
-        pj = self.djvupage
+        pj = self.djvupagejob
         data = pj.render(
             djvud.RENDER_COLOR,
             (0, 0, self.canvas_width, self.canvas_height),
@@ -263,6 +762,21 @@ class DjvuPage(EmptyPage):
         )
         img = QImage(data, self.canvas_width, self.canvas_height, QImage.Format_RGB32)
         return img
+
+    def load_links(self):
+        an = self.djvupage.annotations
+        an.wait()
+        for se in an.sexpr.value:
+            if len(se) >= 4 and se[0] == djvue.Symbol("maparea"):
+                data = (se[1],)
+                x0, y0, w, h = se[3][1:]
+                rect = (
+                    x0 / self.internal_width, 
+                    1 - (y0+h) / self.internal_height,
+                    (x0+w) / self.internal_width, 
+                    1 - y0 / self.internal_height, 
+                )
+                self.links.append(ExternalLink(self, rect, *data))
 
 ########################################################################
 # DjvuDocument
@@ -426,8 +940,12 @@ class ViewerMainWindow(QMainWindow):
         self.close_act = QAction("Close")
         self.close_act.setShortcuts(QKeySequence.Close);
         self.close_act.triggered.connect(self.close_view)
+        self.duplicate_act = QAction("Duplicate")
+        self.duplicate_act.setShortcuts(QKeySequence(Qt.CTRL + Qt.Key_D))
+        self.duplicate_act.triggered.connect(self.duplicate_view)
         self.file_menu.addAction(self.close_act)
         self.file_menu.addAction(self.hola_act)
+        self.file_menu.addAction(self.duplicate_act)
 
     def close_view(self, *arg):
         self.sidebar.remove_current_tab()
@@ -440,6 +958,24 @@ class ViewerMainWindow(QMainWindow):
         self.sidebar.add_tab(label, view)
         view.grabKeyboard()
         self.raise_()
+        return view
+
+    def duplicate_view(self, *args):
+        current_view = self.stack.currentWidget()
+        file = current_view.file_name
+        view = self.add_view(file)
+        view.zoom = current_view.zoom
+        if view.zoom != 1.:
+            for p in view.pages:
+                p.set_zoom(view.zoom)
+        view.history = current_view.history
+        view.history_pos = current_view.history_pos
+        n, dy = current_view.get_current_rel_pos()
+        r = current_view.get_current_rel_h_scroll()
+        def _for_later():
+            view.go_to(n, dy, save_current_position=False)
+            view.set_rel_h_scroll(r)
+        QTimer.singleShot(0, _for_later)
 
 ########################################################################
 # RPCTManager
@@ -539,6 +1075,8 @@ class ViewerApp(QApplication):
     @classmethod
     def run(cls, argv=None):
         if __debug__: deb("starting viewer app")
+        fitz.TOOLS.set_aa_level(8)
+        if __debug__: deb(AA=fitz.TOOLS.show_aa_level())
         if __debug__: deb(argv=argv)
         if argv is None:
             argv = sys.argv
