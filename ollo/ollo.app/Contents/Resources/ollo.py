@@ -3,12 +3,13 @@
 # imports
 ########################################################################
 
+import itertools
 import os
 import sys
 import tempfile
 import time
+import unicodedata
 
-from collections import namedtuple
 from pathlib import Path
 
 import djvu.decode as djvud
@@ -38,6 +39,19 @@ if __debug__:
         if infos:
             infos = " " + infos
         print(f"[{stamp}] [{nline}]{infos}")
+
+########################################################################
+# event_filter
+########################################################################
+
+class event_filter(QObject):
+
+    def __init__(self, filter_function):
+        super().__init__()
+        self.filter_function = filter_function
+
+    def eventFilter(self, obj, event):
+        return self.filter_function(obj, event)
 
 ########################################################################
 # FoundText(QWidget):
@@ -229,8 +243,11 @@ class EmptyPage(QWidget):
         self.internal_width = self.base_canvas_width
         self.internal_height = self.page_ratio * self.base_canvas_width
         self.zoom = 1.
+        self.crop = 0.
         self.links = []
         self.found_items = []
+        self.sel_start = None
+        self.sel_rect = None
         self.last_search = ""
         self.page_loaded = False
         self._init_page_()
@@ -242,7 +259,11 @@ class EmptyPage(QWidget):
     def set_zoom(self, new_zoom):
         if self.zoom != new_zoom:
             self.zoom = new_zoom
-        self.recompute_size()
+            self.recompute_size()
+
+    def set_crop(self, new_crop):
+        if self.crop != new_crop:
+            self.crop = new_crop
 
     def recompute_size(self, preserve_relative_position=True):
         if self.document_view.last_scroll_delta >= 0:
@@ -266,10 +287,10 @@ class EmptyPage(QWidget):
 
     def get_image(self):
         try:
-            img = self.document.get_image(self.page_num, self.zoom)
+            img = self.document.get_image(self.page_num, self.zoom, self.crop)
         except KeyError:
             img = self.generate_image()
-            self.document.save_image(self.page_num, self.zoom, img)
+            self.document.save_image(self.page_num, self.zoom, img, self.crop)
         return img
 
     def generate_image(self):
@@ -287,6 +308,12 @@ class EmptyPage(QWidget):
         painter.fillRect(rect, Qt.white)
         self.paint_page(painter, rect)
         painter.drawRect(rect)
+        if self.sel_rect is not None:
+            pen = QPen(QColor("#0000ff"))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.fillRect(self.sel_rect, QColor("#44ffcc00"))
+            painter.drawRect(self.sel_rect)
 
     def paint_page(self, painter, rect):
         img = self.get_image()
@@ -337,6 +364,41 @@ class EmptyPage(QWidget):
     def find(self, needle):
         pass
 
+    def mousePressEvent(self, event):
+        self.sel_start = event.pos()
+        self.sel_rect = None
+        self.update()
+
+    def mouseMoveEvent(self, event):
+        self.sel_rect = QRect(self.sel_start, event.pos())
+        self.update()
+    
+    def mouseReleaseEvent(self, event):
+        self._copy_selection()
+
+    def _copy_selection(self):
+        if self.sel_rect is None:
+            return
+        r = self.sel_rect.normalized()
+        x0, y0, x1, y1 = r.getCoords()
+        internal_rect = (
+            x0 / self.canvas_width * self.internal_width,
+            y0 / self.canvas_height * self.internal_height,
+            x1 / self.canvas_width * self.internal_width,
+            y1 / self.canvas_height * self.internal_height,
+        )
+        if __debug__: deb(copy_selection=internal_rect)
+        sel = self.copy_selection(internal_rect)
+        if sel:
+            can_sel = unicodedata.normalize('NFKD',sel)
+            if __debug__: deb(new_clipboard=repr(can_sel))
+            qapp = QCoreApplication.instance()
+            cb = qapp.clipboard()
+            cb.setText(can_sel)
+
+    def copy_selection(self, rect):
+        pass
+
 ########################################################################
 # EmptyDocucment
 ########################################################################
@@ -344,38 +406,27 @@ class EmptyPage(QWidget):
 class EmptyDocucment:
 
     page_class = EmptyPage
+    doc_type = "Unknown"
     cache_size_limit = 20
 
     def __init__(self, file_name):
         self.file_name = file_name
         self.images = {}
+        self.num_pages = 0
+        self.toc = []
         self._init_document_()
 
     def _init_document_(self):
         self.num_pages = 47
-        pass
 
-    def save_image(self, page_num, zoom, img):
+    def save_image(self, page_num, zoom, img, crop=0):
         while len(self.images) > self.cache_size_limit:
             k = next(iter(self.images))
             self.images.pop(k)
-        self.images[page_num, zoom] = img
+        self.images[page_num, zoom, crop] = img
 
-    def get_image(self, page_num, zoom):
-        return self.images[page_num, zoom]
-
-########################################################################
-# event_filter
-########################################################################
-
-class event_filter(QObject):
-
-    def __init__(self, filter_function):
-        super().__init__()
-        self.filter_function = filter_function
-
-    def eventFilter(self, obj, event):
-        return self.filter_function(obj, event)
+    def get_image(self, page_num, zoom, crop=0):
+        return self.images[page_num, zoom, crop]
 
 ########################################################################
 # DocumentView
@@ -393,6 +444,7 @@ class DocumentView(QScrollArea):
         self.history = [(0,-1.0*gap)]
         self.history_pos = 0
         self.zoom = 1.
+        self.crop = 0.
         self._init_document_()
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
@@ -404,6 +456,9 @@ class DocumentView(QScrollArea):
         self.layout.setSpacing(gap)
         self.layout.setSizeConstraint(QLayout.SetFixedSize)
         container.setLayout(self.layout)
+        self.stack = QStackedWidget()
+        self.stack.installEventFilter(self.stack_paint_filter)
+        self.page_mode = "continuous"
         self.setWidget(container)
         self._y = 0
         self.last_scroll_delta = 0
@@ -433,31 +488,106 @@ class DocumentView(QScrollArea):
             self.pages.append(p)
             self.layout.addWidget(p)
 
+    def single_page_mode(self):
+        if self.page_mode == "single":
+            return
+        n = self.current_page_number
+        for p in reversed(self.pages):
+            self.layout.removeWidget(p)
+        self.layout.addWidget(self.stack)
+        for p in self.pages:
+            self.stack.addWidget(p)
+        self.stack.show()
+        self.stack.setCurrentIndex(n)
+        self.page_mode = "single"
+
+    def continuous_page_mode(self):
+        if self.page_mode == "continuous":
+            return
+        n = self.stack.currentIndex()
+        for p in reversed(self.pages):
+            self.stack.removeWidget(p)
+        self.layout.removeWidget(self.stack)
+        for p in self.pages:
+            self.layout.addWidget(p)
+            p.show()
+        self.go_to(n)
+        self.page_mode = "continuous"
+
+    @event_filter
+    def stack_paint_filter(obj, event):
+        if event.type() == QEvent.Paint:
+            page = obj.currentWidget()
+            if page:
+                if not page.page_loaded:
+                    page.load_page()
+                obj.setFixedSize(page.canvas_width, page.canvas_height)
+        return False
+
     def record_scroll(self, new_y):
         self.last_scroll_delta = new_y - self._y
         self._y = new_y
 
     def keyPressEvent(self, e):
         k = e.key()
-        if k == Qt.Key_Minus:
-            return self.zoom_out()
-        if k == Qt.Key_Equal:
-            return self.zoom_in()
-        if k == Qt.Key_0:
-            return self.reset_zoom()
-        if k == Qt.Key_G:
-            return self.go_to_page_dialog()
-        if k == Qt.Key_F:
-            return self.find_dialog()
-        if k == Qt.Key_N:
-            return self.find_next()
-        if k == Qt.Key_M:
-            return self.find_previous()
-        if k == Qt.Key_BracketLeft:
-            return self.go_back()
-        if k == Qt.Key_BracketRight:
-            return self.go_forward()
+        modifiers = QApplication.keyboardModifiers()
+        if modifiers == Qt.ControlModifier:
+            if k == Qt.Key_Minus:
+                return self.crop_out()
+            if k == Qt.Key_Equal:
+                return self.crop_in()
+            if k == Qt.Key_0:
+                return self.reset_crop()
+        else:
+            if k == Qt.Key_Minus:
+                return self.zoom_out()
+            if k == Qt.Key_Equal:
+                return self.zoom_in()
+            if k == Qt.Key_0:
+                return self.reset_zoom()
+        if self.page_mode == "continuous":
+            if k == Qt.Key_S:
+                return self.single_page_mode()
+            if k == Qt.Key_G:
+                return self.go_to_page_dialog()
+            if k == Qt.Key_F:
+                return self.find_dialog()
+            if k == Qt.Key_N:
+                return self.find_next()
+            if k == Qt.Key_M:
+                return self.find_previous()
+            if k == Qt.Key_BracketLeft:
+                return self.go_back()
+            if k == Qt.Key_BracketRight:
+                return self.go_forward()
+        if self.page_mode == "single":
+            if k == Qt.Key_C:
+                return self.continuous_page_mode()
+            if k in (
+                Qt.Key_Space,
+                Qt.Key_Enter,
+                Qt.Key_Right,
+                Qt.Key_Down,
+            ):
+                return self.spm_next_page()
+            if k in (
+                Qt.Key_Left,
+                Qt.Key_Up,
+            ):
+                return self.spm_previous_page()
         super().keyPressEvent(e)
+
+    def spm_next_page(self):
+        n = self.stack.currentIndex() + 1
+        if n >= len(self.pages):
+            return
+        self.stack.setCurrentIndex(n)
+
+    def spm_previous_page(self):
+        n = self.stack.currentIndex() - 1
+        if n < 0:
+            return
+        self.stack.setCurrentIndex(n)
 
     def zoom_out(self):
         self.set_zoom(zoom_delta=-0.1)
@@ -497,6 +627,28 @@ class DocumentView(QScrollArea):
             self.set_rel_h_scroll(h)
         QTimer.singleShot(0, _for_later)
 
+    def crop_out(self):
+        self.set_crop(crop_delta=-0.025)
+
+    def crop_in(self):
+        self.set_crop(crop_delta=0.025)
+
+    def reset_crop(self):
+        self.set_crop(new_crop=0.)
+
+    def set_crop(self, new_crop=None, crop_delta=0.):
+        if new_crop is None:
+            new_crop = self.crop + crop_delta
+        if not (0. <= new_crop <= 0.3):
+            return
+        if new_crop == self.crop:
+            return
+        self.crop = new_crop
+        for p in self.pages:
+            p.set_crop(new_crop)
+            if not p.visibleRegion().isEmpty():
+                p.update()
+
     @property
     def current_page_number(self):
         for page_num, page in enumerate(self.pages):
@@ -510,10 +662,11 @@ class DocumentView(QScrollArea):
         new_page_num, ok = QInputDialog.getInt(
             self,
             "Go to page",
-            "Page",
+            "Go to page",
             value=cur_page_num+1,
             min=1,
             max=self.document.num_pages,
+            flags=Qt.Sheet,
         )
         self.grabKeyboard()
         if ok:
@@ -575,6 +728,8 @@ class DocumentView(QScrollArea):
                 self.history[self.history_pos:] = [pos0]
             self.history_pos += 1
             self.history[self.history_pos:] = [pos]
+        if not page.page_loaded:
+            page._load_page()
         y = page.pos().y()
         if window_point == "north":
             v = int(y + dy * self.zoom)
@@ -606,8 +761,9 @@ class DocumentView(QScrollArea):
         needle, ok = QInputDialog.getText(
             self,
             "Find",
-            "Needle:",
+            "Find:",
             text=self.last_search,
+            flags=Qt.Sheet,
         )
         self.grabKeyboard()
         if ok:
@@ -669,11 +825,20 @@ class PdfPage(EmptyPage):
         self.internal_width = d.rect.width
         self.page_ratio = d.rect.height / d.rect.width
         self.text_page = None
+        self.page_words = None
 
     def generate_image(self):
-        r = 2*self.canvas_width / self.display_list.rect.width
+        hcrop = int(self.crop*self.internal_width)
+        vcrop = int(self.crop*self.internal_height)
+        crop_rect = fitz.IRect(
+            hcrop,
+            vcrop,
+            self.internal_width - hcrop,
+            self.internal_height - vcrop
+        )
+        r = 2*self.canvas_width / (self.internal_width - 2*hcrop)
         m = fitz.Matrix(r, r)
-        pix = self.display_list.getPixmap(matrix=m)
+        pix = self.display_list.getPixmap(matrix=m, clip=crop_rect)
         fmt = QImage.Format_RGBA8888 if pix.alpha else QImage.Format_RGB888
         img = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
         return img
@@ -714,6 +879,29 @@ class PdfPage(EmptyPage):
             )
             self.found_items.append(FoundText(needle, self, rel_rect))
 
+    def copy_selection(self, rect):
+        if self.text_page is None:
+            self.text_page = self.display_list.getTextPage()
+        if self.page_words is None:
+            words = []
+            self.text_page.extractWORDS(words)
+            words.sort(key=lambda w: (w[3], w[0]))
+            self.page_words = words
+        frect = fitz.Rect(*rect)
+        words = [
+            w
+            for w in self.page_words
+            if fitz.Rect(w[:4]) in frect
+        ]
+        group = itertools.groupby(words, key=lambda w: w[3])
+        sel = "\n".join([
+            " ".join(w[4] for w in gwords)
+            for y1, gwords in group
+        ])
+        return sel
+        for y1, gwords in group:
+            print(" ".join(w[4] for w in gwords))
+
 
 ########################################################################
 # PdfDocument
@@ -722,10 +910,20 @@ class PdfPage(EmptyPage):
 class PdfDocument(EmptyDocucment):
 
     page_class = PdfPage
+    doc_type = "PDF"
 
     def _init_document_(self):
         self.pdfdoc = fitz.open(self.file_name)
         self.num_pages = self.pdfdoc.pageCount
+        raw_toc = self.pdfdoc.getToC()
+        self.toc = [
+            [
+                f"{'    '*(lvl-1)}{title} (p.{page_num})", 
+                page_num
+            ]
+            for lvl, title, page_num in raw_toc
+            if 0 <= page_num < self.num_pages
+        ]
 
 ########################################################################
 # PdfView
@@ -754,10 +952,14 @@ class DjvuPage(EmptyPage):
         dpf.rows_top_to_bottom = 1
         dpf.y_top_to_bottom = 0
         pj = self.djvupagejob
+        hcrop = int(self.crop*self.canvas_width)
+        vcrop = int(self.crop*self.canvas_height)
         data = pj.render(
             djvud.RENDER_COLOR,
-            (0, 0, self.canvas_width, self.canvas_height),
-            (0, 0, self.canvas_width, self.canvas_height),
+            (0, 0, self.canvas_width+2*hcrop, self.canvas_height+2*vcrop),
+            (hcrop, vcrop, self.canvas_width, self.canvas_height),
+            # (0, 0, self.canvas_width, self.canvas_height),
+            # (0, 0, self.canvas_width, self.canvas_height),
             dpf,
         )
         img = QImage(data, self.canvas_width, self.canvas_height, QImage.Format_RGB32)
@@ -785,6 +987,7 @@ class DjvuPage(EmptyPage):
 class DjvuDocument(EmptyDocucment):
 
     page_class = DjvuPage
+    doc_type = "DjVu"
 
     def _init_document_(self):
         ctx = djvud.Context()
@@ -792,6 +995,13 @@ class DjvuDocument(EmptyDocucment):
         self.djvudoc = doc = ctx.new_document(uri)
         doc.decoding_job.wait()
         self.num_pages = len(doc.pages)
+
+    def _unused_get_toc_(self):
+        outline = doc.outline
+        outline.wait()
+        print(outline.sexpr)
+        for se in outline.sexpr.value:
+            print(se)
 
 ########################################################################
 # DjvuView
@@ -872,6 +1082,7 @@ class SideBar(QListWidget):
         it.setData(self._data_key, view)
         self.addItem(it)
         self.setCurrentItem(it)
+        self.update_menu(view)
 
     def remove_current_tab(self):
         row = self.currentRow()
@@ -879,7 +1090,12 @@ class SideBar(QListWidget):
             return
         it = self.takeItem(row)
         view = it.data(self._data_key)
+        view.releaseKeyboard()
         self.stack.removeWidget(view)
+        new_view = self.stack.currentWidget()
+        if new_view:
+            new_view.grabKeyboard()
+        self.update_menu(new_view)
         del it
 
     def on_click(self, it):
@@ -889,6 +1105,11 @@ class SideBar(QListWidget):
             old_view.releaseKeyboard()
         self.stack.setCurrentWidget(view)
         view.grabKeyboard()
+        self.update_menu(view)
+
+    def update_menu(self, view):
+        self.viewer.set_page_menu(view)
+
 
 ########################################################################
 # ViewerMainWindow
@@ -932,20 +1153,87 @@ class ViewerMainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.layout.addWidget(self.stack)
 
-    def _init_menu_(self):
-        self.menu = menu = QMenuBar()
-        self.file_menu = menu.addMenu("File")
-        self.hola_act = QAction("O ollo que todo o ve")
-        self.hola_act.setMenuRole(QAction.ApplicationSpecificRole)
-        self.close_act = QAction("Close")
-        self.close_act.setShortcuts(QKeySequence.Close);
-        self.close_act.triggered.connect(self.close_view)
-        self.duplicate_act = QAction("Duplicate")
-        self.duplicate_act.setShortcuts(QKeySequence(Qt.CTRL + Qt.Key_D))
-        self.duplicate_act.triggered.connect(self.duplicate_view)
-        self.file_menu.addAction(self.close_act)
-        self.file_menu.addAction(self.hola_act)
-        self.file_menu.addAction(self.duplicate_act)
+    def _init_main_menu_(self):
+        self.menubar = QMenuBar()
+        self.main_menu = self.menubar.addMenu("ollo")
+        self.menu_actions = []
+        for title, key, handler, role in (
+            ["About ollo", None, None, None],
+            ["separator", None, None, None],
+            ["Close", QKeySequence.Close, self.close_view, None],
+            ["Duplicate", QKeySequence(Qt.CTRL + Qt.Key_D), self.duplicate_view, None],
+            ["separator", None, None, None],
+            ["Single page mode", QKeySequence(Qt.Key_S), None, None],
+            ["Continuous page mode", QKeySequence(Qt.Key_C), None, None],
+            ["separator", None, None, None],
+            ["Zoom in", QKeySequence(Qt.Key_Plus), None, None],
+            ["Zoom out", QKeySequence(Qt.Key_Minus), None, None],
+            ["Crop in", QKeySequence(Qt.META + Qt.Key_Plus), None, None],
+            ["Crop out", QKeySequence(Qt.META + Qt.Key_Minus), None, None],
+            ["separator", None, None, None],
+            ["Go to page", QKeySequence(Qt.Key_G), None, None],
+            ["Find...", QKeySequence(Qt.Key_F), None, None],
+            ["Quit", None, self.quit_dialog, QAction.QuitRole],
+        ):
+            act = QAction(title)
+            if title == "separator":
+                act.setSeparator(True)
+            if role is None:
+                act.setMenuRole(QAction.ApplicationSpecificRole)
+            else:
+                act.setMenuRole(role)
+            if key is not None:
+                act.setShortcuts(key)
+            if handler is not None:
+                act.triggered.connect(handler)
+            self.menu_actions.append(act)
+            self.main_menu.addAction(act)
+
+    def _init_page_menu_(self):
+        self.page_menu = self.menubar.addMenu("0 pages")
+        self.no_file_action = QAction("No file open")
+        self.page_menu.addAction(self.no_file_action)
+        self.page_menu_title_template = ""
+        self.page_menu_timer = QTimer()
+        self.page_menu_timer.timeout.connect(self.update_page_menu)
+        self.page_menu_timer.start(500)
+
+    def set_page_menu(self, view=None):
+        self.page_actions = []
+        m = self.page_menu
+        m.clear()
+        if view is None:
+            num_pages = 0
+            toc = None
+            doc_type = ""
+        else:
+            num_pages = view.document.num_pages
+            toc = view.document.toc
+            doc_type = f"{view.document.doc_type} - "
+        self.page_menu_title_template = \
+            f"{doc_type}page {{}} of {num_pages}"
+        if toc is None:
+            return
+        if not toc:
+            toc = [["no table of contents", None]]
+        for heading, page in toc:
+            act = QAction(heading)
+            if heading == "separator":
+                act.setSeparator(True)
+            if page is not None:
+                def _handle(*a, page=page):
+                    view.go_to(page-1)
+                act.triggered.connect(_handle)
+            m.addAction(act)
+            self.page_actions.append(act)
+
+    def update_page_menu(self):
+        if not (current_view := self.stack.currentWidget()):
+            return
+        title = self.page_menu_title_template.format(
+            current_view.current_page_number+1
+        )
+        self.page_menu.setTitle(title)
 
     def close_view(self, *arg):
         self.sidebar.remove_current_tab()
@@ -976,6 +1264,24 @@ class ViewerMainWindow(QMainWindow):
             view.go_to(n, dy, save_current_position=False)
             view.set_rel_h_scroll(r)
         QTimer.singleShot(0, _for_later)
+
+    def quit_dialog(self, *args):
+        current_view = self.stack.currentWidget()
+        if current_view is None:
+            self.qapp.quit()
+            return
+        current_view.releaseKeyboard()
+        msg = QMessageBox(self)
+        msg.setWindowFlags(Qt.Sheet)
+        msg.setText("Are you sure?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.No)
+        for b in msg.buttons():
+            b.setFocusPolicy(Qt.StrongFocus)
+        reply = msg.exec()
+        current_view.grabKeyboard()
+        if reply == QMessageBox.Yes:
+            self.qapp.quit()
 
 ########################################################################
 # RPCTManager
