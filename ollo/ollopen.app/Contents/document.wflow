@@ -67,9 +67,29 @@
 
 import os
 import os.path
+import shutil
 import sys
 
-from tempfile import NamedTemporaryFile
+from contextlib import contextmanager
+from tempfile import NamedTemporaryFile, mkdtemp
+
+########################################################################
+# 
+########################################################################
+
+@contextmanager
+def proc_arg(arg, base_tmp_dir):
+    if "Downloads" in arg or "Documents" in arg:
+        tmp_dir = mkdtemp(dir=base_tmp_dir)
+        name = os.path.basename(arg)
+        new_arg = os.path.join(tmp_dir, name)
+        try:
+            shutil.copy(arg, new_arg)
+        except:
+            pass
+        yield new_arg
+    else:
+        yield arg
 
 ########################################################################
 # 
@@ -79,10 +99,17 @@ def main():
 
 
     home = os.getenv("HOME")
+    base_tmp_dir = os.path.join(home, ".ollo_rpc", "tmp")
     rpc_dir = os.path.join(home, ".ollo_rpc", "rpc")
     ollo_app = os.path.join(home, ".dotfiles", "ollo", "ollo.app")
 
     os.system("open \"%s\"" % ollo_app)
+
+    if not os.path.isdir(base_tmp_dir):
+        try:
+            os.makedirs(base_tmp_dir)
+        except:
+            return
 
     if not os.path.isdir(rpc_dir):
         try:
@@ -95,7 +122,8 @@ def main():
             dir=rpc_dir,
             delete=False,
         ) as f:
-            f.write(a)
+            with proc_arg(a, base_tmp_dir) as pa:
+                f.write(pa)
 
 ########################################################################
 # 

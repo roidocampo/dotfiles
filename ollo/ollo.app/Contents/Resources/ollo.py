@@ -5,11 +5,13 @@
 
 import itertools
 import os
+import shutil
 import sys
 import tempfile
 import time
 import unicodedata
 
+from contextlib import contextmanager
 from pathlib import Path
 
 import djvu.decode as djvud
@@ -95,7 +97,6 @@ class FoundText(QWidget):
             pen.setWidth(3)
         painter.setPen(pen)
         painter.drawRect(rect)
-        #painter.fillRect(rect, QColor("#4499cccc"))
 
     def trigger_next_page_find(self):
         page = self.page
@@ -252,6 +253,8 @@ class EmptyPage(QWidget):
         self.page_loaded = False
         self._init_page_()
         self.recompute_size(False)
+        self.setMouseTracking(True)
+        self.mouse_pressed = False
 
     def _init_page_(self):
         pass
@@ -297,8 +300,7 @@ class EmptyPage(QWidget):
         return None
 
     def paintEvent(self, e):
-        if not self.page_loaded:
-            self._load_page()
+        self.ensure_neigh_load()
         painter = QPainter(self)
         painter.setRenderHints(
             QPainter.Antialiasing
@@ -307,13 +309,24 @@ class EmptyPage(QWidget):
         rect = QRect(0, 0, painter.device().width(), painter.device().height())
         painter.fillRect(rect, Qt.white)
         self.paint_page(painter, rect)
-        painter.drawRect(rect)
+        if not self.document_view.presentation_mode:
+            painter.drawRect(rect)
         if self.sel_rect is not None:
-            pen = QPen(QColor("#0000ff"))
+            pen = QPen(QColor("#ddaa00"))
             pen.setWidth(2)
             painter.setPen(pen)
             painter.fillRect(self.sel_rect, QColor("#44ffcc00"))
             painter.drawRect(self.sel_rect)
+
+    def ensure_neigh_load(self):
+        for neigh in (0, 1, -1):
+            try:
+                n_page = self.document_view.pages[self.page_num+neigh]
+            except:
+                continue
+            else:
+                if not n_page.page_loaded:
+                    n_page._load_page()
 
     def paint_page(self, painter, rect):
         img = self.get_image()
@@ -365,16 +378,27 @@ class EmptyPage(QWidget):
         pass
 
     def mousePressEvent(self, event):
+        self.mouse_pressed = True
         self.sel_start = event.pos()
         self.sel_rect = None
         self.update()
+        self.document_view.mouse_pressed = True
+        self.document_view.setCursor(Qt.ArrowCursor)
+        self.document_view.last_mouse_move = time.time()
 
     def mouseMoveEvent(self, event):
-        self.sel_rect = QRect(self.sel_start, event.pos())
-        self.update()
+        if self.mouse_pressed:
+            self.sel_rect = QRect(self.sel_start, event.pos())
+            self.update()
+        self.document_view.setCursor(Qt.ArrowCursor)
+        self.document_view.last_mouse_move = time.time()
     
     def mouseReleaseEvent(self, event):
+        self.mouse_pressed = False
         self._copy_selection()
+        self.document_view.mouse_pressed = False
+        self.document_view.setCursor(Qt.ArrowCursor)
+        self.document_view.last_mouse_move = time.time()
 
     def _copy_selection(self):
         if self.sel_rect is None:
@@ -408,6 +432,8 @@ class EmptyDocucment:
     page_class = EmptyPage
     doc_type = "Unknown"
     cache_size_limit = 20
+    external_command = None
+    external_command_2 = None
 
     def __init__(self, file_name):
         self.file_name = file_name
@@ -429,6 +455,31 @@ class EmptyDocucment:
         return self.images[page_num, zoom, crop]
 
 ########################################################################
+# ErrorPage
+########################################################################
+
+class ErrorPage(EmptyPage):
+
+    def load_page(self):
+        label = QLabel(
+            f"error: {self.document.file_name}",
+            parent=self
+        )
+        label.move(3,3)
+        label.show()
+
+########################################################################
+# ErrorDocucment
+########################################################################
+
+class ErrorDocucment(EmptyDocucment):
+
+    page_class = ErrorPage
+
+    def _init_document_(self):
+        self.num_pages = 1
+
+########################################################################
 # DocumentView
 ########################################################################
 
@@ -436,12 +487,35 @@ class DocumentView(QScrollArea):
 
     document_class = EmptyDocucment
 
-    def __init__(self, file_name, *args, **kws):
+    _css_normal = """
+        QScrollArea {
+            border: none;
+        }
+        #container {
+            border: none;
+        }
+    """
+
+    _css_presentation_mode_dark = """
+        QScrollArea {
+            border: none;
+            background-color: black;
+        }
+        #container {
+            border: none;
+            background-color: black;
+        }
+    """
+
+    def __init__(self, window, file_name, *args, **kws):
         super().__init__(*args, **kws)
+        self.window = window
         self.file_name = file_name
         if __debug__: deb(file_name=file_name)
-        self.gap = gap = 12
-        self.history = [(0,-1.0*gap)]
+        self.setStyleSheet(self._css_normal)
+        self.inital_margin = self.margin = margin = 12
+        self.inital_gap = self.gap = gap = margin
+        self.history = [(0,-1.0*margin)]
         self.history_pos = 0
         self.zoom = 1.
         self.crop = 0.
@@ -451,14 +525,17 @@ class DocumentView(QScrollArea):
         self.horizontalScrollBar().installEventFilter(self.hbar_filter)
         self.setAlignment(Qt.AlignCenter)
         self.container = container = QWidget()
+        container.setObjectName("container")
         self.layout = QVBoxLayout(container)
-        self.layout.setContentsMargins(gap, gap, gap, gap)
+        self.layout.setContentsMargins(margin, margin, margin, margin)
         self.layout.setSpacing(gap)
         self.layout.setSizeConstraint(QLayout.SetFixedSize)
         container.setLayout(self.layout)
         self.stack = QStackedWidget()
         self.stack.installEventFilter(self.stack_paint_filter)
         self.page_mode = "continuous"
+        self.presentation_mode = False
+        self.mode_before_presentation = None
         self.setWidget(container)
         self._y = 0
         self.last_scroll_delta = 0
@@ -466,6 +543,12 @@ class DocumentView(QScrollArea):
         self.last_search = ""
         self.current_found_item = None
         self._init_pages_()
+        self.setMouseTracking(True)
+        self.mouse_timer = QTimer()
+        self.mouse_timer.timeout.connect(self.hide_mouse)
+        self.mouse_timer.start(1000)
+        self.last_mouse_move = 0
+        self.mouse_pressed = False
 
     @event_filter
     def hbar_filter(obj, event):
@@ -477,6 +560,27 @@ class DocumentView(QScrollArea):
             return False
 
     def _init_document_(self):
+        global APP_TEMP_DIR
+        try:
+            self.document = self.document_class(self.file_name)
+        except:
+            if __debug__: deb(f"error loading document: {self.file_name}")
+        else:
+            return
+        if APP_TEMP_DIR is not None:
+            try:
+                if __debug__: deb(f"trying symlink")
+                self.orig_file_name = Path(self.file_name)
+                tmp_base = Path(tempfile.mkdtemp(dir=APP_TEMP_DIR))
+                self.file_name = tmp_base / self.orig_file_name.name
+                self.orig_file_name.symlink_to(self.file_name)
+                self.document = self.document_class(self.file_name)
+            except:
+                if __debug__: deb(f"symlinking failed")
+            else:
+                if __debug__: deb(f"symlinking worked: {self.file_name}")
+                return
+        self.document_class = ErrorDocucment
         self.document = self.document_class(self.file_name)
 
     def _init_pages_(self):
@@ -511,8 +615,34 @@ class DocumentView(QScrollArea):
         for p in self.pages:
             self.layout.addWidget(p)
             p.show()
-        self.go_to(n)
+        def _for_later():
+            self.go_to(n)
+        QTimer.singleShot(0, _for_later)
         self.page_mode = "continuous"
+
+    def toggle_presentation_mode(self):
+        if self.presentation_mode:
+            self.deactivate_presentation_mode()
+            if self.mode_before_presentation == "continuous":
+                self.continuous_page_mode()
+                self.mode_before_presentation = None
+        else:
+            self.activate_presentation_mode()
+        self.presentation_mode = not self.presentation_mode
+
+    def activate_presentation_mode(self):
+        self.setStyleSheet("")
+        self.setStyleSheet(self._css_presentation_mode_dark)
+        self.window.sidebar.hide()
+        self.window.showFullScreen()
+        self.activateWindow()
+
+    def deactivate_presentation_mode(self):
+        self.setStyleSheet("")
+        self.setStyleSheet(self._css_normal)
+        self.window.sidebar.show()
+        self.window.showNormal()
+        self.activateWindow()
 
     @event_filter
     def stack_paint_filter(obj, event):
@@ -545,27 +675,26 @@ class DocumentView(QScrollArea):
                 return self.zoom_in()
             if k == Qt.Key_0:
                 return self.reset_zoom()
+        if k == Qt.Key_H:
+            return self.fit_horizontally()
+        if k == Qt.Key_V:
+            return self.fit_vertically()
         if self.page_mode == "continuous":
             if k == Qt.Key_S:
                 return self.single_page_mode()
-            if k == Qt.Key_G:
-                return self.go_to_page_dialog()
-            if k == Qt.Key_F:
-                return self.find_dialog()
-            if k == Qt.Key_N:
-                return self.find_next()
-            if k == Qt.Key_M:
-                return self.find_previous()
-            if k == Qt.Key_BracketLeft:
-                return self.go_back()
-            if k == Qt.Key_BracketRight:
-                return self.go_forward()
+            if k == Qt.Key_P:
+                self.mode_before_presentation = "continuous"
+                self.single_page_mode()
+                return self.toggle_presentation_mode()
         if self.page_mode == "single":
             if k == Qt.Key_C:
                 return self.continuous_page_mode()
+            if k == Qt.Key_P:
+                return self.toggle_presentation_mode()
             if k in (
                 Qt.Key_Space,
                 Qt.Key_Enter,
+                Qt.Key_Return,
                 Qt.Key_Right,
                 Qt.Key_Down,
             ):
@@ -575,6 +704,18 @@ class DocumentView(QScrollArea):
                 Qt.Key_Up,
             ):
                 return self.spm_previous_page()
+        if k == Qt.Key_G:
+            return self.go_to_page_dialog()
+        if k == Qt.Key_F:
+            return self.find_dialog()
+        if k == Qt.Key_N:
+            return self.find_next()
+        if k == Qt.Key_M:
+            return self.find_previous()
+        if k == Qt.Key_BracketLeft:
+            return self.go_back()
+        if k == Qt.Key_BracketRight:
+            return self.go_forward()
         super().keyPressEvent(e)
 
     def spm_next_page(self):
@@ -591,41 +732,51 @@ class DocumentView(QScrollArea):
 
     def zoom_out(self):
         self.set_zoom(zoom_delta=-0.1)
-        return
-        if self.zoom > 0.5:
-            self.zoom -= 0.1
-            self.zoom_pages()
 
     def zoom_in(self):
         self.set_zoom(zoom_delta=0.1)
-        return
-        if self.zoom < 5:
-            self.zoom += 0.1
-            self.zoom_pages()
 
     def reset_zoom(self):
         self.set_zoom(new_zoom=1.)
-        return
-        if self.zoom != 1.:
-            self.zoom = 1.
-            self.zoom_pages()
 
-    def set_zoom(self, new_zoom=None, zoom_delta=0.):
+    def fit_horizontally(self):
+        p = self.current_page_number
+        page = self.pages[p]
+        base_width = page.base_canvas_width
+        new_zoom = self.width() / base_width
+        self.set_zoom(new_zoom, new_margin=0)
+
+    def fit_vertically(self):
+        p = self.current_page_number
+        page = self.pages[p]
+        base_height = page.base_canvas_width * page.page_ratio
+        new_zoom = self.height() / base_height
+        self.set_zoom(new_zoom, new_margin=0)
+
+    def set_zoom(self, new_zoom=None, zoom_delta=0., new_margin=None):
         if new_zoom is None:
             new_zoom = self.zoom + zoom_delta
-        if not (0.5 <= new_zoom <= 5):
+        if not (0.3 <= new_zoom <= 8):
             return
         if new_zoom == self.zoom:
             return
-        n, dy = self.get_current_rel_pos(window_point="center")
-        h = self.get_current_rel_h_scroll()
+        if new_margin is None:
+            new_margin = self.inital_margin
+        if new_margin != self.margin:
+            self.margin = m = new_margin
+            self.layout.setContentsMargins(m,m,m,m)
+            #self.layout.setSpacing(m)
+        if self.page_mode == "continuous":
+            n, dy = self.get_current_rel_pos(window_point="center")
+            h = self.get_current_rel_h_scroll()
         self.zoom = new_zoom
         for p in self.pages:
             p.set_zoom(self.zoom)
-        def _for_later():
-            self.go_to(n, dy, save_current_position=False, window_point="center")
-            self.set_rel_h_scroll(h)
-        QTimer.singleShot(0, _for_later)
+        if self.page_mode == "continuous":
+            def _for_later():
+                self.go_to(n, dy, save_current_position=False, window_point="center")
+                self.set_rel_h_scroll(h)
+            QTimer.singleShot(0, _for_later)
 
     def crop_out(self):
         self.set_crop(crop_delta=-0.025)
@@ -704,8 +855,39 @@ class DocumentView(QScrollArea):
         dy = (y-page.y())/self.zoom
         return page_num, dy
 
+    def go_to(self, *args, **kws):
+        if self.page_mode == "continuous":
+            return self._go_to_continuous(*args, **kws)
+        else:
+            return self._go_to_single(*args, **kws)
 
-    def go_to(
+    def _go_to_single(
+            self,
+            page_num=None,
+            dy=None,
+            save_current_position=True,
+            window_point="north",
+    ):
+        n0 = self.stack.currentIndex()
+        n = page_num
+        if n0 == n:
+            return
+        try:
+            page = self.pages[n]
+        except:
+            return
+        pos0 = (n0, -1.0*self.gap)
+        pos  = (n,  -1.0*self.gap)
+        if save_current_position:
+            if pos0 != self.history[self.history_pos]:
+                self.history_pos += 1
+                self.history[self.history_pos:] = [pos0]
+            self.history_pos += 1
+            self.history[self.history_pos:] = [pos]
+        page.ensure_neigh_load()
+        self.stack.setCurrentIndex(n)
+
+    def _go_to_continuous(
             self,
             page_num=None,
             dy=None,
@@ -714,7 +896,7 @@ class DocumentView(QScrollArea):
     ):
         pos0 = self.get_current_rel_pos(window_point)
         if dy is None:
-            dy = -self.gap/self.zoom
+            dy = -self.margin/self.zoom
         pos = page_num, dy
         if pos0 == pos:
             return
@@ -728,8 +910,7 @@ class DocumentView(QScrollArea):
                 self.history[self.history_pos:] = [pos0]
             self.history_pos += 1
             self.history[self.history_pos:] = [pos]
-        if not page.page_loaded:
-            page._load_page()
+        page.ensure_neigh_load()
         y = page.pos().y()
         if window_point == "north":
             v = int(y + dy * self.zoom)
@@ -811,6 +992,27 @@ class DocumentView(QScrollArea):
                 self.ensureWidgetVisible(n)
                 n.page.update()
             QTimer.singleShot(0, _for_later)
+
+    def hide_mouse(self):
+        if not self.mouse_pressed:
+            t0 = self.last_mouse_move
+            t = time.time()
+            if t-t0 > 1:
+                self.setCursor(Qt.BlankCursor)
+
+    def mouseMoveEvent(self, event):
+        self.setCursor(Qt.ArrowCursor)
+        self.last_mouse_move = time.time()
+
+    def mousePressEvent(self, event):
+        self.mouse_pressed = True
+        self.setCursor(Qt.ArrowCursor)
+        self.last_mouse_move = time.time()
+
+    def mouseReleaseEvent(self, event):
+        self.mouse_pressed = False
+        self.setCursor(Qt.ArrowCursor)
+        self.last_mouse_move = time.time()
 
 ########################################################################
 # PdfPage
@@ -911,6 +1113,8 @@ class PdfDocument(EmptyDocucment):
 
     page_class = PdfPage
     doc_type = "PDF"
+    external_command = 'open -a Preview "{}"'
+    external_command_2 = 'open -a "/Applications/Adobe Acrobat Reader DC.app" "{}"'
 
     def _init_document_(self):
         self.pdfdoc = fitz.open(self.file_name)
@@ -988,6 +1192,7 @@ class DjvuDocument(EmptyDocucment):
 
     page_class = DjvuPage
     doc_type = "DjVu"
+    external_command = 'open -a DjView "{}"'
 
     def _init_document_(self):
         ctx = djvud.Context()
@@ -1014,7 +1219,7 @@ class DjvuView(DocumentView):
 # create_view
 ########################################################################
 
-def create_view(file):
+def create_view(window, file):
     file_path = Path(file)
     file_name = file_path.stem
     file_ext = file_path.suffix
@@ -1024,7 +1229,7 @@ def create_view(file):
         view_class = DjvuView
     else:
         view_class = DocumentView
-    view = view_class(file)
+    view = view_class(window, file)
     return file_name, view
 
 ########################################################################
@@ -1160,19 +1365,33 @@ class ViewerMainWindow(QMainWindow):
         for title, key, handler, role in (
             ["About ollo", None, None, None],
             ["separator", None, None, None],
-            ["Close", QKeySequence.Close, self.close_view, None],
-            ["Duplicate", QKeySequence(Qt.CTRL + Qt.Key_D), self.duplicate_view, None],
+            ["Open Tab", QKeySequence.Open, self.open_dialog, None],
+            ["Close Tab", QKeySequence.Close, self.close_view, None],
+            ["Duplicate Tab", QKeySequence(Qt.CTRL + Qt.Key_D), self.duplicate_view, None],
             ["separator", None, None, None],
-            ["Single page mode", QKeySequence(Qt.Key_S), None, None],
-            ["Continuous page mode", QKeySequence(Qt.Key_C), None, None],
+            ["Open in External Viewer", QKeySequence(Qt.CTRL + Qt.Key_P), self.open_externally, None],
+            ["Open in External Viewer 2", QKeySequence(Qt.CTRL + Qt.Key_A), self.open_externally_2, None],
             ["separator", None, None, None],
-            ["Zoom in", QKeySequence(Qt.Key_Plus), None, None],
-            ["Zoom out", QKeySequence(Qt.Key_Minus), None, None],
-            ["Crop in", QKeySequence(Qt.META + Qt.Key_Plus), None, None],
-            ["Crop out", QKeySequence(Qt.META + Qt.Key_Minus), None, None],
+            ["Single Page Mode", QKeySequence(Qt.Key_S), None, None],
+            ["Continuous Page Mode", QKeySequence(Qt.Key_C), None, None],
+            ["Presentation Mode", QKeySequence(Qt.Key_P), None, None],
             ["separator", None, None, None],
-            ["Go to page", QKeySequence(Qt.Key_G), None, None],
+            ["Zoom In", QKeySequence(Qt.Key_Plus), None, None],
+            ["Zoom Out", QKeySequence(Qt.Key_Minus), None, None],
+            ["Reset Zoom", QKeySequence(Qt.Key_0), None, None],
+            ["Fit Horizontally", QKeySequence(Qt.Key_H), None, None],
+            ["Fit Vertically", QKeySequence(Qt.Key_V), None, None],
+            ["Crop In", QKeySequence(Qt.CTRL + Qt.Key_Plus), False, None],
+            ["Crop Out", QKeySequence(Qt.CTRL + Qt.Key_Minus), False, None],
+            ["Reset Crop", QKeySequence(Qt.CTRL + Qt.Key_0), False, None],
+            ["separator", None, None, None],
+            ["Go to Page", QKeySequence(Qt.Key_G), None, None],
+            ["Go Back", QKeySequence(Qt.Key_BracketLeft), None, None],
+            ["Go Forward", QKeySequence(Qt.Key_BracketRight), None, None],
+            ["separator", None, None, None],
             ["Find...", QKeySequence(Qt.Key_F), None, None],
+            ["Find Next", QKeySequence(Qt.Key_N), None, None],
+            ["Find Previous", QKeySequence(Qt.Key_M), None, None],
             ["Quit", None, self.quit_dialog, QAction.QuitRole],
         ):
             act = QAction(title)
@@ -1184,7 +1403,9 @@ class ViewerMainWindow(QMainWindow):
                 act.setMenuRole(role)
             if key is not None:
                 act.setShortcuts(key)
-            if handler is not None:
+            if handler is False:
+                act.setEnabled(False)
+            elif handler is not None:
                 act.triggered.connect(handler)
             self.menu_actions.append(act)
             self.main_menu.addAction(act)
@@ -1239,7 +1460,7 @@ class ViewerMainWindow(QMainWindow):
         self.sidebar.remove_current_tab()
 
     def add_view(self, file):
-        file_name, view = create_view(file)
+        file_name, view = create_view(self, file)
         self.stack.addWidget(view)
         self.stack.setCurrentWidget(view)
         label = file_name.replace("_", " ")
@@ -1283,6 +1504,32 @@ class ViewerMainWindow(QMainWindow):
         if reply == QMessageBox.Yes:
             self.qapp.quit()
 
+    def open_dialog(self, *args):
+        dia = QFileDialog(self)
+        dia.setWindowFlags(Qt.Sheet)
+        dia.setFileMode(QFileDialog.ExistingFiles)
+        dia.setNameFilter("Documents (*.pdf *.djvu)")
+        dia.setViewMode(QFileDialog.Detail)
+        if dia.exec():
+            for file in dia.selectedFiles():
+                self.add_view(file)
+
+    def open_externally(self, *args):
+        current_view = self.stack.currentWidget()
+        file = current_view.file_name
+        cmd = current_view.document.external_command
+        if cmd is not None:
+            cmd = cmd.format(file)
+            os.system(cmd)
+
+    def open_externally_2(self, *args):
+        current_view = self.stack.currentWidget()
+        file = current_view.file_name
+        cmd = current_view.document.external_command_2
+        if cmd is not None:
+            cmd = cmd.format(file)
+            os.system(cmd)
+
 ########################################################################
 # RPCTManager
 ########################################################################
@@ -1292,6 +1539,7 @@ class RPCManager:
     base_folder = Path.home() / ".ollo_rpc"
     pid_folder = base_folder / "pid"
     rpc_folder = base_folder / "rpc"
+    tmp_folder = base_folder / "tmp"
 
     def __init__(self, qapp):
         if __debug__: deb("creating rpc managaer")
@@ -1373,6 +1621,21 @@ class RPCManager:
 EVENT_NAMES = { 0: "QEvent::None", 114: "QEvent::ActionAdded", 113: "QEvent::ActionChanged", 115: "QEvent::ActionRemoved", 99: "QEvent::ActivationChange", 121: "QEvent::ApplicationActivate", 122: "QEvent::ApplicationDeactivate", 36: "QEvent::ApplicationFontChange", 37: "QEvent::ApplicationLayoutDirectionChange", 38: "QEvent::ApplicationPaletteChange", 214: "QEvent::ApplicationStateChange", 35: "QEvent::ApplicationWindowIconChange", 68: "QEvent::ChildAdded", 69: "QEvent::ChildPolished", 71: "QEvent::ChildRemoved", 40: "QEvent::Clipboard", 19: "QEvent::Close", 200: "QEvent::CloseSoftwareInputPanel", 178: "QEvent::ContentsRectChange", 82: "QEvent::ContextMenu", 183: "QEvent::CursorChange", 52: "QEvent::DeferredDelete", 60: "QEvent::DragEnter", 62: "QEvent::DragLeave", 61: "QEvent::DragMove", 63: "QEvent::Drop", 170: "QEvent::DynamicPropertyChange", 98: "QEvent::EnabledChange", 10: "QEvent::Enter", 150: "QEvent::EnterEditFocus", 124: "QEvent::EnterWhatsThisMode", 206: "QEvent::Expose", 116: "QEvent::FileOpen", 8: "QEvent::FocusIn", 9: "QEvent::FocusOut", 23: "QEvent::FocusAboutToChange", 97: "QEvent::FontChange", 198: "QEvent::Gesture", 202: "QEvent::GestureOverride", 188: "QEvent::GrabKeyboard", 186: "QEvent::GrabMouse", 159: "QEvent::GraphicsSceneContextMenu", 164: "QEvent::GraphicsSceneDragEnter", 166: "QEvent::GraphicsSceneDragLeave", 165: "QEvent::GraphicsSceneDragMove", 167: "QEvent::GraphicsSceneDrop", 163: "QEvent::GraphicsSceneHelp", 160: "QEvent::GraphicsSceneHoverEnter", 162: "QEvent::GraphicsSceneHoverLeave", 161: "QEvent::GraphicsSceneHoverMove", 158: "QEvent::GraphicsSceneMouseDoubleClick", 155: "QEvent::GraphicsSceneMouseMove", 156: "QEvent::GraphicsSceneMousePress", 157: "QEvent::GraphicsSceneMouseRelease", 182: "QEvent::GraphicsSceneMove", 181: "QEvent::GraphicsSceneResize", 168: "QEvent::GraphicsSceneWheel", 18: "QEvent::Hide", 27: "QEvent::HideToParent", 127: "QEvent::HoverEnter", 128: "QEvent::HoverLeave", 129: "QEvent::HoverMove", 96: "QEvent::IconDrag", 101: "QEvent::IconTextChange", 83: "QEvent::InputMethod", 207: "QEvent::InputMethodQuery", 169: "QEvent::KeyboardLayoutChange", 6: "QEvent::KeyPress", 7: "QEvent::KeyRelease", 89: "QEvent::LanguageChange", 90: "QEvent::LayoutDirectionChange", 76: "QEvent::LayoutRequest", 11: "QEvent::Leave", 151: "QEvent::LeaveEditFocus", 125: "QEvent::LeaveWhatsThisMode", 88: "QEvent::LocaleChange", 176: "QEvent::NonClientAreaMouseButtonDblClick", 174: "QEvent::NonClientAreaMouseButtonPress", 175: "QEvent::NonClientAreaMouseButtonRelease", 173: "QEvent::NonClientAreaMouseMove", 177: "QEvent::MacSizeChange", 43: "QEvent::MetaCall", 102: "QEvent::ModifiedChange", 4: "QEvent::MouseButtonDblClick", 2: "QEvent::MouseButtonPress", 3: "QEvent::MouseButtonRelease", 5: "QEvent::MouseMove", 109: "QEvent::MouseTrackingChange", 13: "QEvent::Move", 197: "QEvent::NativeGesture", 208: "QEvent::OrientationChange", 12: "QEvent::Paint", 39: "QEvent::PaletteChange", 131: "QEvent::ParentAboutToChange", 21: "QEvent::ParentChange", 212: "QEvent::PlatformPanel", 217: "QEvent::PlatformSurface", 75: "QEvent::Polish", 74: "QEvent::PolishRequest", 123: "QEvent::QueryWhatsThis", 106: "QEvent::ReadOnlyChange", 199: "QEvent::RequestSoftwareInputPanel", 14: "QEvent::Resize", 204: "QEvent::ScrollPrepare", 205: "QEvent::Scroll", 117: "QEvent::Shortcut", 51: "QEvent::ShortcutOverride", 17: "QEvent::Show", 26: "QEvent::ShowToParent", 50: "QEvent::SockAct", 192: "QEvent::StateMachineSignal", 193: "QEvent::StateMachineWrapped", 112: "QEvent::StatusTip", 100: "QEvent::StyleChange", 87: "QEvent::TabletMove", 92: "QEvent::TabletPress", 93: "QEvent::TabletRelease", 171: "QEvent::TabletEnterProximity", 172: "QEvent::TabletLeaveProximity", 219: "QEvent::TabletTrackingChange", 22: "QEvent::ThreadChange", 1: "QEvent::Timer", 120: "QEvent::ToolBarChange", 110: "QEvent::ToolTip", 184: "QEvent::ToolTipChange", 194: "QEvent::TouchBegin", 209: "QEvent::TouchCancel", 196: "QEvent::TouchEnd", 195: "QEvent::TouchUpdate", 189: "QEvent::UngrabKeyboard", 187: "QEvent::UngrabMouse", 78: "QEvent::UpdateLater", 77: "QEvent::UpdateRequest", 111: "QEvent::WhatsThis", 118: "QEvent::WhatsThisClicked", 31: "QEvent::Wheel", 132: "QEvent::WinEventAct", 24: "QEvent::WindowActivate", 103: "QEvent::WindowBlocked", 25: "QEvent::WindowDeactivate", 34: "QEvent::WindowIconChange", 105: "QEvent::WindowStateChange", 33: "QEvent::WindowTitleChange", 104: "QEvent::WindowUnblocked", 203: "QEvent::WinIdChange", 126: "QEvent::ZOrderChange", }
 
 ########################################################################
+# AppTempDir
+########################################################################
+
+APP_TEMP_DIR = None
+
+@contextmanager
+def app_temp_dir():
+    global APP_TEMP_DIR
+    RPCManager.tmp_folder.mkdir(parents=True, exist_ok=True)
+    APP_TEMP_DIR = RPCManager.tmp_folder
+    yield
+    APP_TEMP_DIR = None
+    shutil.rmtree(RPCManager.tmp_folder, ignore_errors=True)
+
+########################################################################
 # ViewerApp
 ########################################################################
 
@@ -1386,14 +1649,15 @@ class ViewerApp(QApplication):
         if __debug__: deb(argv=argv)
         if argv is None:
             argv = sys.argv
-        app_instance = cls(argv)
-        if app_instance.other_exists:
-            if __debug__: deb("quitting")
-        else:
-            if __debug__: deb("starting qt loop")
-            exit_code = app_instance.exec_()
-            if __debug__: deb(exit_code=exit_code)
-        del app_instance
+        with app_temp_dir():
+            app_instance = cls(argv)
+            if app_instance.other_exists:
+                if __debug__: deb("quitting")
+            else:
+                if __debug__: deb("starting qt loop")
+                exit_code = app_instance.exec_()
+                if __debug__: deb(exit_code=exit_code)
+            del app_instance
 
     def __init__(self, argv, *args, **kws):
         self.rpc_manager = RPCManager(self)
