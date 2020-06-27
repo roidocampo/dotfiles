@@ -1233,6 +1233,72 @@ def create_view(window, file):
     return file_name, view
 
 ########################################################################
+# SideBarItemDelegate
+########################################################################
+
+class SideBarItemDelegate(QStyledItemDelegate):
+
+    def __init__(self, *args, **kws):
+        super().__init__(*args, **kws)
+        self.cache = {}
+
+    def compute_cache_entry(self, option, index):
+        word_positions = []
+        fm = QFontMetrics(option.font)
+        model = index.model()
+        text = model.data(index, Qt.DisplayRole)
+        x_margin = 12
+        y_margin_top = 3
+        y_margin_bottom = 10
+        h = fm.height()
+        x = x_margin
+        y = y_margin_top + h
+        x_max = 190
+        for word in text.split():
+            d = 0
+            for char in word:
+                d += fm.horizontalAdvance(char)
+            d += fm.horizontalAdvance(" ")
+            if x + d > x_max:
+                y += h
+                x = x_margin
+                word_positions.append((x,y,word))
+                if d > x_max:
+                    y += h
+                else:
+                    x += d
+            else:
+                word_positions.append((x,y,word))
+                x += d
+        y += y_margin_bottom
+        return (QSize(x_max,y),) + tuple(word_positions)
+
+    def sizeHint(self, option, index):
+        iid = index.internalId
+        if iid not in self.cache:
+            self.cache[iid] = self.compute_cache_entry(option, index)
+        return self.cache[iid][0]
+
+    color_bg = QColor("#aab9cc")
+    color_border = QColor("#30445f")
+
+    def paint(self, painter, option, index):
+        iid = index.internalId
+        if iid not in self.cache:
+            self.cache[iid] = self.compute_cache_entry(option, index)
+        painter.fillRect(option.rect, self.color_bg)
+        x0, y0, x1, y1 = option.rect.getCoords()
+        for (x,y,word) in self.cache[iid][1:]:
+            painter.drawText(x0+x, y0+y, word)
+        painter.fillRect(
+            QRect(QPoint(x0,y1), QPoint(x1,y1)),
+            self.color_border,
+        )
+        if option.state & QStyle.State_Selected:
+            r = QRect(QPoint(x0,y0-1), QPoint(x0+5,y1))
+            painter.fillRect(r, self.color_border)
+
+########################################################################
 # SideBar
 ########################################################################
 
@@ -1243,32 +1309,15 @@ class SideBar(QListWidget):
             border: none;
             background-color : #A4B9CC;
             color: black;
-            border-right     : 1px solid black;
+            border-right     : 1px solid #30445F;
         }
-
-        QListWidget::icon {
-            qproperty-icon: none;
-        }
-            
-        QListWidget::item {
-            background-color : #A4B9CC;
-            padding          : 5px;
-            padding-left     : 8px;
-            border-bottom    : 1px solid black;
-            border-left      : none;
-        }
-
-        QListWidget::item:selected {
-            color: black;
-            padding-left: 3px;
-            border-left: 5px solid #30445F;
-        }
-
     """
 
     def __init__(self, viewer, *args, **kws):
         self.viewer = viewer
         super().__init__(*args, **kws)
+        self.delegate = SideBarItemDelegate()
+        self.setItemDelegate(self.delegate)
         self.setMaximumWidth(200)
         self.setWordWrap(True)
         self.setStyleSheet(self._css)
