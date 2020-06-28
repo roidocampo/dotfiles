@@ -101,7 +101,7 @@ def main():
     home = os.getenv("HOME")
     base_tmp_dir = os.path.join(home, ".ollo_rpc", "tmp")
     rpc_dir = os.path.join(home, ".ollo_rpc", "rpc")
-    ollo_app = os.path.join(home, ".dotfiles", "ollo", "ollo.app")
+    ollo_app = os.path.join(home, ".dotfiles", "apps", "ollo.app")
 
     os.system("open \"%s\"" % ollo_app)
 
