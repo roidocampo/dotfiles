@@ -1260,16 +1260,11 @@ class SideBarItemDelegate(QStyledItemDelegate):
                 d += fm.horizontalAdvance(char)
             d += fm.horizontalAdvance(" ")
             if x + d > x_max:
-                y += h
-                x = x_margin
-                word_positions.append((x,y,word))
-                if d > x_max:
+                if x != x_margin:
                     y += h
-                else:
-                    x += d
-            else:
-                word_positions.append((x,y,word))
-                x += d
+                    x = x_margin
+            word_positions.append((x,y,word))
+            x += d
         y += y_margin_bottom
         return (QSize(x_max,y),) + tuple(word_positions)
 

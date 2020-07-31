@@ -1,3 +1,4 @@
+import re
 import sys
 import multiprocessing
 import subprocess
@@ -54,7 +55,9 @@ class inb:
             result_text,result_html = self.execute_cell(kernel_name, code)
             result = b""
             if result_html:
+                #result_html = html.escape(result_html)
                 result_html = result_html.encode("utf-8")
+                #result_html = b"<pre>" + result_html + b"</pre>"
                 result += result_html
             if result_text:
                 result_text = html.escape(result_text)
@@ -169,7 +172,17 @@ class inb:
             try:
                 msg = c.get_iopub_msg(timeout=2)
             except:
-                break
+                txt  = "Waiting for cell run to finish. "
+                txt += "Check again? [Y/n]: "
+                vim.command(f"silent !echo [get_iopub_msg timeout]")
+                vim.command('call inputsave()')
+                vim.command(f"let user_input = input('{txt}')")
+                vim.command('call inputrestore()')
+                vim.command('redraw!')
+                if vim.eval('user_input') in {"N", "n", "q", "Q"}:
+                    break
+                else:
+                    continue
             msg = JupyterMessage(msg)
             if msg.is_idle:
                 break
@@ -210,7 +223,7 @@ class JupyterMessage:
                     result_html += f'<img src="data:image/png;base64,{b}">'
                     rich = True
                 if 'text/html' in data:
-                    result_html += data['text/html']
+                    result_html += proc_mathjax(data['text/html'])
                     rich = True
                 if not rich and 'text/plain' in data:
                     result_text += data['text/plain']
@@ -223,6 +236,25 @@ class JupyterMessage:
         return result_text, result_html
 
 
+sage_mathjax = re.compile(r"""
+    \s*
+    <html>\s*
+    <script \s+ type="math/tex; \s+ mode=display">
+    \s*
+    (.*)
+    \s*
+    </script>
+    \s*
+    </html>
+    \s*
+""", re.MULTILINE | re.VERBOSE | re.DOTALL)
+
+def proc_mathjax(html):
+    m = sage_mathjax.match(html)
+    if not m:
+        return html
+    else:
+        return r"<blockquote>\(" + m[1] + r"\)</blockquote>"
 
 class SignManager:
 
