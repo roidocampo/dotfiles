@@ -292,7 +292,10 @@ class EmptyPage(QWidget):
         try:
             img = self.document.get_image(self.page_num, self.zoom, self.crop)
         except KeyError:
-            img = self.generate_image()
+            try:
+                img = self.generate_image()
+            except:
+                img = None
             self.document.save_image(self.page_num, self.zoom, img, self.crop)
         return img
 
@@ -661,6 +664,14 @@ class DocumentView(QScrollArea):
     def keyPressEvent(self, e):
         k = e.key()
         modifiers = QApplication.keyboardModifiers()
+        if k == Qt.Key_PageDown:
+            return self.go_to_next_page()
+        if k == Qt.Key_PageUp:
+            return self.go_to_previous_page()
+        if k == Qt.Key_Home:
+            return self.go_to(0)
+        if k == Qt.Key_End:
+            return self.go_to(-1)
         if modifiers == Qt.ControlModifier:
             if k == Qt.Key_Minus:
                 return self.crop_out()
@@ -911,19 +922,29 @@ class DocumentView(QScrollArea):
             self.history_pos += 1
             self.history[self.history_pos:] = [pos]
         page.ensure_neigh_load()
-        y = page.pos().y()
-        if window_point == "north":
-            v = int(y + dy * self.zoom)
-        elif window_point == "center":
-            h = self.verticalScrollBar().pageStep()
-            v = int(y + dy * self.zoom) - int(h/2)
-        elif window_point == "south":
-            h = self.verticalScrollBar().pageStep()
-            v = int(y + dy * self.zoom) - h
-        else:
-            v = int(y + dy * self.zoom)
-        self.verticalScrollBar().setValue(v)
-        pos0 = self.get_current_rel_pos(window_point)
+        def _for_later():
+            y = page.pos().y()
+            if window_point == "north":
+                v = int(y + dy * self.zoom)
+            elif window_point == "center":
+                h = self.verticalScrollBar().pageStep()
+                v = int(y + dy * self.zoom) - int(h/2)
+            elif window_point == "south":
+                h = self.verticalScrollBar().pageStep()
+                v = int(y + dy * self.zoom) - h
+            else:
+                v = int(y + dy * self.zoom)
+            self.verticalScrollBar().setValue(v)
+        QTimer.singleShot(0, _for_later)
+
+    def go_to_next_page(self):
+        p, dy = self.get_current_rel_pos()
+        self.go_to(p+1, save_current_position=False)
+
+    def go_to_previous_page(self):
+        p, dy = self.get_current_rel_pos()
+        if p > 0:
+            self.go_to(p-1, save_current_position=False)
 
     def go_back(self):
         if self.history_pos > 0:
@@ -1148,7 +1169,7 @@ class DjvuPage(EmptyPage):
         self.internal_height = pj.height
         self.internal_width = pj.width
         self.page_ratio = pj.height / pj.width
-        self.recompute_size()
+        #self.recompute_size()
         self.djvupagejob = pj
 
     def generate_image(self):
@@ -1326,10 +1347,14 @@ class SideBar(QListWidget):
 
     _data_key = 1000
 
-    def add_tab(self, label, view):
+    def add_tab(self, label, view, at_end=True):
         it = QListWidgetItem(label)
         it.setData(self._data_key, view)
-        self.addItem(it)
+        if at_end:
+            self.addItem(it)
+        else:
+            r = self.currentRow()
+            self.insertItem(r+1, it)
         self.setCurrentItem(it)
         self.update_menu(view)
 
@@ -1432,6 +1457,10 @@ class ViewerMainWindow(QMainWindow):
             ["Go to Page", QKeySequence(Qt.Key_G), None, None],
             ["Go Back", QKeySequence(Qt.Key_BracketLeft), None, None],
             ["Go Forward", QKeySequence(Qt.Key_BracketRight), None, None],
+            ["Go to First Page", QKeySequence(Qt.Key_Home), False, None],
+            ["Go to Previous Page", QKeySequence(Qt.Key_PageUp), False, None],
+            ["Go to Next Page", QKeySequence(Qt.Key_PageDown), False, None],
+            ["Go to Last Page", QKeySequence(Qt.Key_End), False, None],
             ["separator", None, None, None],
             ["Find...", QKeySequence(Qt.Key_F), None, None],
             ["Find Next", QKeySequence(Qt.Key_N), None, None],
@@ -1503,12 +1532,12 @@ class ViewerMainWindow(QMainWindow):
     def close_view(self, *arg):
         self.sidebar.remove_current_tab()
 
-    def add_view(self, file):
+    def add_view(self, file, at_end=True):
         file_name, view = create_view(self, file)
         self.stack.addWidget(view)
         self.stack.setCurrentWidget(view)
         label = file_name.replace("_", " ")
-        self.sidebar.add_tab(label, view)
+        self.sidebar.add_tab(label, view, at_end)
         view.grabKeyboard()
         self.raise_()
         return view
@@ -1516,7 +1545,7 @@ class ViewerMainWindow(QMainWindow):
     def duplicate_view(self, *args):
         current_view = self.stack.currentWidget()
         file = current_view.file_name
-        view = self.add_view(file)
+        view = self.add_view(file, False)
         view.zoom = current_view.zoom
         if view.zoom != 1.:
             for p in view.pages:
