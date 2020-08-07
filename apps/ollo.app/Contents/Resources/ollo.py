@@ -292,12 +292,29 @@ class EmptyPage(QWidget):
         try:
             img = self.document.get_image(self.page_num, self.zoom, self.crop)
         except KeyError:
-            try:
-                img = self.generate_image()
-            except:
-                img = None
-            self.document.save_image(self.page_num, self.zoom, img, self.crop)
+            img = self.get_neigh_images()[0]
         return img
+
+    def get_neigh_images(self, radius=1):
+        self.ensure_neigh_load(radius)
+        imgs = {}
+        for neigh in range(-radius,radius+1):
+            try:
+                n_page_num = self.page_num+neigh
+                n_page = self.document_view.pages[n_page_num]
+            except:
+                n_img = None
+            else:
+                try:
+                    n_img = self.document.get_image(n_page_num, self.zoom, self.crop)
+                except KeyError:
+                    try:
+                        n_img = n_page.generate_image()
+                    except:
+                        n_img = None
+                    self.document.save_image(n_page_num, self.zoom, n_img, self.crop)
+            imgs[neigh] = n_img
+        return imgs
 
     def generate_image(self):
         return None
@@ -321,8 +338,8 @@ class EmptyPage(QWidget):
             painter.fillRect(self.sel_rect, QColor("#44ffcc00"))
             painter.drawRect(self.sel_rect)
 
-    def ensure_neigh_load(self):
-        for neigh in (0, 1, -1):
+    def ensure_neigh_load(self, radius=1):
+        for neigh in range(-radius, radius+1):
             try:
                 n_page = self.document_view.pages[self.page_num+neigh]
             except:
@@ -552,6 +569,7 @@ class DocumentView(QScrollArea):
         self.mouse_timer.start(1000)
         self.last_mouse_move = 0
         self.mouse_pressed = False
+        self.iddle_count = 0
 
     @event_filter
     def hbar_filter(obj, event):
@@ -1020,6 +1038,9 @@ class DocumentView(QScrollArea):
             t = time.time()
             if t-t0 > 1:
                 self.setCursor(Qt.BlankCursor)
+                self.handle_iddle()
+            else:
+                self.iddle_count = 0
 
     def mouseMoveEvent(self, event):
         self.setCursor(Qt.ArrowCursor)
@@ -1034,6 +1055,14 @@ class DocumentView(QScrollArea):
         self.mouse_pressed = False
         self.setCursor(Qt.ArrowCursor)
         self.last_mouse_move = time.time()
+
+    def handle_iddle(self):
+        self.iddle_count += 1
+        if self.iddle_count > 5:
+            return
+        cur_page_num = self.current_page_number
+        cur_page = self.pages[cur_page_num]
+        cur_page.get_neigh_images(2*self.iddle_count)
 
 ########################################################################
 # PdfPage
@@ -1547,9 +1576,13 @@ class ViewerMainWindow(QMainWindow):
         file = current_view.file_name
         view = self.add_view(file, False)
         view.zoom = current_view.zoom
+        view.crop = current_view.crop
         if view.zoom != 1.:
             for p in view.pages:
                 p.set_zoom(view.zoom)
+        if view.crop != 0.:
+            for p in view.pages:
+                p.set_crop(view.crop)
         view.history = current_view.history
         view.history_pos = current_view.history_pos
         n, dy = current_view.get_current_rel_pos()
