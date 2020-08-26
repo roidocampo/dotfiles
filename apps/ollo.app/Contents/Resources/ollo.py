@@ -46,14 +46,20 @@ if __debug__:
 # event_filter
 ########################################################################
 
-class event_filter(QObject):
+class EventFilter(QObject):
 
-    def __init__(self, filter_function):
-        super().__init__()
-        self.filter_function = filter_function
+    def __init__(self, parent, filter_function):
+        super().__init__(parent=parent)
+        self._parent = parent
+        self._filter_function = filter_function
 
     def eventFilter(self, obj, event):
-        return self.filter_function(obj, event)
+        return self._filter_function(self._parent, obj, event)
+
+def event_filter(filter_function):
+    def creator(parent):
+        return EventFilter(parent, filter_function)
+    return creator
 
 ########################################################################
 # FoundText(QWidget):
@@ -251,13 +257,9 @@ class EmptyPage(QWidget):
         self.sel_rect = None
         self.last_search = ""
         self.page_loaded = False
-        self._init_page_()
         self.recompute_size(False)
         self.setMouseTracking(True)
         self.mouse_pressed = False
-
-    def _init_page_(self):
-        pass
 
     def set_zoom(self, new_zoom):
         if self.zoom != new_zoom:
@@ -298,9 +300,9 @@ class EmptyPage(QWidget):
     def get_neigh_images(self, radius=1):
         self.ensure_neigh_load(radius)
         imgs = {}
-        for neigh in range(-radius,radius+1):
+        for neigh in range(-1,radius+1):
+            n_page_num = self.page_num+neigh
             try:
-                n_page_num = self.page_num+neigh
                 n_page = self.document_view.pages[n_page_num]
             except:
                 n_img = None
@@ -339,7 +341,7 @@ class EmptyPage(QWidget):
             painter.drawRect(self.sel_rect)
 
     def ensure_neigh_load(self, radius=1):
-        for neigh in range(-radius, radius+1):
+        for neigh in range(-1, radius+1):
             try:
                 n_page = self.document_view.pages[self.page_num+neigh]
             except:
@@ -542,7 +544,7 @@ class DocumentView(QScrollArea):
         self._init_document_()
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.horizontalScrollBar().installEventFilter(self.hbar_filter)
+        self.horizontalScrollBar().installEventFilter(self.hbar_filter())
         self.setAlignment(Qt.AlignCenter)
         self.container = container = QWidget()
         container.setObjectName("container")
@@ -552,7 +554,7 @@ class DocumentView(QScrollArea):
         self.layout.setSizeConstraint(QLayout.SetFixedSize)
         container.setLayout(self.layout)
         self.stack = QStackedWidget()
-        self.stack.installEventFilter(self.stack_paint_filter)
+        self.stack.installEventFilter(self.stack_paint_filter())
         self.page_mode = "continuous"
         self.presentation_mode = False
         self.mode_before_presentation = None
@@ -572,13 +574,15 @@ class DocumentView(QScrollArea):
         self.iddle_count = 0
 
     @event_filter
-    def hbar_filter(obj, event):
+    def hbar_filter(self, obj, event):
         if event.type() != QEvent.Wheel:
             return False
-        elif event.modifiers() == Qt.NoModifier:
-            return True
         else:
-            return False
+            self.mouseReleaseEvent(None)
+            if event.modifiers() == Qt.NoModifier:
+                return True
+            else:
+                return False
 
     def _init_document_(self):
         global APP_TEMP_DIR
@@ -616,7 +620,7 @@ class DocumentView(QScrollArea):
     def single_page_mode(self):
         if self.page_mode == "single":
             return
-        n = self.current_page_number
+        n, dy = self.get_current_rel_pos(window_point="center")
         for p in reversed(self.pages):
             self.layout.removeWidget(p)
         self.layout.addWidget(self.stack)
@@ -624,6 +628,7 @@ class DocumentView(QScrollArea):
             self.stack.addWidget(p)
         self.stack.show()
         self.stack.setCurrentIndex(n)
+        self.verticalScrollBar().setValue(0)
         self.page_mode = "single"
 
     def continuous_page_mode(self):
@@ -666,7 +671,7 @@ class DocumentView(QScrollArea):
         self.activateWindow()
 
     @event_filter
-    def stack_paint_filter(obj, event):
+    def stack_paint_filter(self, obj, event):
         if event.type() == QEvent.Paint:
             page = obj.currentWidget()
             if page:
@@ -675,9 +680,12 @@ class DocumentView(QScrollArea):
                 obj.setFixedSize(page.canvas_width, page.canvas_height)
         return False
 
-    def record_scroll(self, new_y):
-        self.last_scroll_delta = new_y - self._y
-        self._y = new_y
+    def record_scroll(self, new_y=None):
+        if new_y is None:
+            self.last_scroll_delta = 0
+        else:
+            self.last_scroll_delta = new_y - self._y
+            self._y = new_y
 
     def keyPressEvent(self, e):
         k = e.key()
@@ -908,13 +916,16 @@ class DocumentView(QScrollArea):
         pos0 = (n0, -1.0*self.gap)
         pos  = (n,  -1.0*self.gap)
         if save_current_position:
+            self.mouseReleaseEvent(None)
             if pos0 != self.history[self.history_pos]:
                 self.history_pos += 1
                 self.history[self.history_pos:] = [pos0]
             self.history_pos += 1
             self.history[self.history_pos:] = [pos]
+        self.record_scroll()
         page.ensure_neigh_load()
         self.stack.setCurrentIndex(n)
+        self.record_scroll()
 
     def _go_to_continuous(
             self,
@@ -934,11 +945,13 @@ class DocumentView(QScrollArea):
         except:
             return
         if save_current_position:
+            self.mouseReleaseEvent(None)
             if pos0 != self.history[self.history_pos]:
                 self.history_pos += 1
                 self.history[self.history_pos:] = [pos0]
             self.history_pos += 1
             self.history[self.history_pos:] = [pos]
+        self.record_scroll()
         page.ensure_neigh_load()
         def _for_later():
             y = page.pos().y()
@@ -953,6 +966,7 @@ class DocumentView(QScrollArea):
             else:
                 v = int(y + dy * self.zoom)
             self.verticalScrollBar().setValue(v)
+            self.record_scroll()
         QTimer.singleShot(0, _for_later)
 
     def go_to_next_page(self):
@@ -1053,13 +1067,17 @@ class DocumentView(QScrollArea):
 
     def mouseReleaseEvent(self, event):
         self.mouse_pressed = False
-        self.setCursor(Qt.ArrowCursor)
+        if event is None:
+            self.setCursor(Qt.BlankCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
         self.last_mouse_move = time.time()
 
     def handle_iddle(self):
         self.iddle_count += 1
         if self.iddle_count > 5:
             return
+        self.record_scroll()
         cur_page_num = self.current_page_number
         cur_page = self.pages[cur_page_num]
         cur_page.get_neigh_images(2*self.iddle_count)
