@@ -94,7 +94,9 @@ call plug#begin('~/.vim/bundle')
     "My blobal plugins
     Plug '~/.vim/myplugins/diff_colors'
     Plug '~/.vim/myplugins/myultisnips'
-    Plug '~/.vim/myplugins/tmux_send_keys'
+    if empty($INSUDOEDIT)
+        Plug '~/.vim/myplugins/tmux_send_keys'
+    endif
     Plug '~/.vim/myplugins/tmux_clipboard'
 
     "My filetype plugins

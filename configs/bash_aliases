@@ -159,6 +159,22 @@ else
 
 fi
 
+###########################################################################
+# sudo and vim
+###########################################################################
+
+function sudo() {
+    if [ "X$1" = "Xvi" -o "X$1" = "Xview" ]; then
+        local vim_cmd=$(which "$1")
+        if [ ! -x "$vim_cmd" ]; then
+            local vim_cmd="$1"
+        fi
+        shift
+        command sudo -E INSUDOEDIT=yes HOME="$HOME" "$vim_cmd" -Z "$@"
+    else
+        command sudo "$@"
+    fi
+}
 
 ###########################################################################
 # texdoc
