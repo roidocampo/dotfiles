@@ -165,9 +165,13 @@ fi
 
 function sudo() {
     if [ "X$1" = "Xvi" -o "X$1" = "Xview" ]; then
-        local vim_cmd=$(which "$1")
+        if [ "X$1" = "Xvi" ]; then
+            local vim_cmd=$(which vim)
+        else
+            local vim_cmd=$(which "$1")
+        fi
         if [ ! -x "$vim_cmd" ]; then
-            local vim_cmd="$1"
+            vim_cmd="$1"
         fi
         shift
         command sudo -E INSUDOEDIT=yes HOME="$HOME" "$vim_cmd" -Z "$@"
