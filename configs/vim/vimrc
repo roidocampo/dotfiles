@@ -67,7 +67,9 @@ call plug#begin('~/.vim/bundle')
     Plug 'chriskempson/base16-vim'
     Plug 'ConradIrwin/vim-bracketed-paste'
     Plug 'ervandew/supertab'
-    Plug 'SirVer/ultisnips'
+    if empty($INSUDOEDIT)
+        Plug 'SirVer/ultisnips'
+    endif
     Plug 'godlygeek/tabular'
     Plug 'tpope/vim-commentary'
     Plug 'dense-analysis/ale'
@@ -96,8 +98,8 @@ call plug#begin('~/.vim/bundle')
     Plug '~/.vim/myplugins/myultisnips'
     if empty($INSUDOEDIT)
         Plug '~/.vim/myplugins/tmux_send_keys'
+        Plug '~/.vim/myplugins/tmux_clipboard'
     endif
-    Plug '~/.vim/myplugins/tmux_clipboard'
 
     "My filetype plugins
     if has('mac')
