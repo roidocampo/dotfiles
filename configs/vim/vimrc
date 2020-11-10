@@ -72,7 +72,6 @@ call plug#begin('~/.vim/bundle')
     endif
     Plug 'godlygeek/tabular'
     Plug 'tpope/vim-commentary'
-    Plug 'dense-analysis/ale'
     Plug 'christoomey/vim-tmux-navigator'
     Plug 'vim-utils/vim-man'
     Plug 'rkitover/vimpager'
@@ -81,6 +80,7 @@ call plug#begin('~/.vim/bundle')
     Plug 'chrisbra/unicode.vim'
 
     "Filetype plugins
+    Plug 'dense-analysis/ale',                  { 'for': ['python', 'php'] }
     Plug 'hdima/python-syntax',                 { 'for': 'python' }
     Plug 'hynek/vim-python-pep8-indent',        { 'for': 'python' }
     Plug 'octol/vim-cpp-enhanced-highlight',    { 'for': 'cpp' }
