@@ -5,6 +5,8 @@
 ########################################################################
 
 CONDA_PACKAGES=(
+    autoconf
+    automake
     bash
     bash-completion
     coreutils
@@ -19,9 +21,11 @@ CONDA_PACKAGES=(
     htop
     imagemagick
     ipython
+    libtool
     make
     nodejs
     python
+    requests
     tar
     tmux
     tree
@@ -33,6 +37,33 @@ CONDA_PACKAGES=(
 GTK_PACKAGES=(
     gtk3
     pygobject
+)
+
+SAGE_PACKAGES=(
+    jupyterlab
+    sage
+)
+
+SAGE_PIPS=(
+    sjk
+)
+
+JUPYTER_PACKAGES=(
+    4ti2
+    gap
+    jupyterlab
+    matplotlib
+    normaliz
+    numpy
+    octave
+    r
+    scipy
+    singular
+    sympy
+)
+
+JUPYTER_PIPS=(
+    sjk
 )
 
 ########################################################################
@@ -365,6 +396,8 @@ setup_conda_env() {
     shift
     local ENV_NAME="$1"
     shift
+    local ENV_PIPS="$1"
+    shift
     local ENV_PACKAGES=("$@")
 
     box_start "$BOX_TITLE SETUP"
@@ -393,6 +426,19 @@ setup_conda_env() {
 
     conda create --name "$ENV_NAME" "${CONDA_PACKAGES[@]}" "${ENV_PACKAGES[@]}"
 
+
+    if [ "$ENV_PIPS" ]; then
+
+        conda activate "$ENV_NAME"
+
+        box_start "CONTINUING $BOX_TITLE SETUP"
+        box_row 1 33 "*" "Installing extra packages via pip"
+        box_end
+
+        pip install $ENV_PIPS
+
+    fi
+
     printf '\n'
 
     box_start "CONTINUING $BOX_TITLE SETUP"
@@ -402,11 +448,35 @@ setup_conda_env() {
 }
 
 ########################################################################
-# setup_gtk
+# setup_gt
 ########################################################################
 
 setup_gtk() {
-    setup_conda_env "GTK" "env-gtk" "${GTK_PACKAGES[@]}"
+    setup_conda_env "GTK" "env-gtk" "" "${GTK_PACKAGES[@]}"
+}
+
+########################################################################
+# setup_jupyter
+########################################################################
+
+setup_jupyter() {
+    setup_conda_env \
+        "JUPYTER" \
+        "env-jupyter" \
+        "${JUPYTER_PIPS[*]}" \
+        "${JUPYTER_PACKAGES[@]}"
+}
+
+########################################################################
+# setup_sage
+########################################################################
+
+setup_sage() {
+    setup_conda_env \
+        "SAGE" \
+        "env-sage" \
+        "${SAGE_PIPS[*]}" \
+        "${SAGE_PACKAGES[@]}"
 }
 
 ########################################################################
@@ -432,7 +502,8 @@ main() {
             help|'') show_help; exit ;;
             dotfiles) setup_dotfiles; exit ;;
             conda) setup_conda; exit ;;
-            jupyter|sage) not_implemented; exit ;;
+            jupyter) setup_jupyter; exit ;;
+            sage) setup_sage; exit ;;
             gtk) setup_gtk; exit ;;
         esac
     fi
