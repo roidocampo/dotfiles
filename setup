@@ -136,9 +136,9 @@ setup_dotfiles() {
 
     for DOTFILE in *; do
         case "$DOTFILE" in
-            *_mac)
+            *[_@]mac)
                 [ "X$UNAME" = "XDarwin" ] && link_dotfile "$DOTFILE" ;;
-            *_linux)
+            *[_@]linux)
                 [ "X$UNAME" = "XLinux" ] && link_dotfile "$DOTFILE" ;;
             *)
                 link_dotfile "$DOTFILE" ;;
@@ -158,7 +158,7 @@ link_dotfile() {
 
     SOURCE_FILE=$DOTFILES_DIR_NAME/configs/$1
 
-    LINK_FILE=$HOME/.$1
+    LINK_FILE=$HOME/.${1%@*}
 
     if [ ! -e "$SOURCE_FILE" ]; then
         box_row 20 31 "$1" "source does not exist"

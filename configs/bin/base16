@@ -281,6 +281,11 @@ function select_option {
 
 function test_themes {
 
+    if [ ! -d "$BASE16_DIR" ]; then
+        echo "* base16 not installed (run base16 install)"
+        return
+    fi
+
     local choice=0
     local theme="(none)"
     local options=( $(list_themes) )

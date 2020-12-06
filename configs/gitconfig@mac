@@ -1,0 +1,5 @@
+[user]
+	name = Roi Docampo
+	email = roidocampo@gmail.com
+[credential]
+	helper = osxkeychain
