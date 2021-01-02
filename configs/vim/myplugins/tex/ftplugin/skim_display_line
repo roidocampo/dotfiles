@@ -25,6 +25,7 @@ while [ "${1:0:1}" == "-" ]; do
     bar=true
   elif [ "$1" == "-g" -o "$1" == "-background" ]; then
     activate=false
+    activate=true
   elif [ "$1" == "-x" ]; then
     moveline=false
   fi

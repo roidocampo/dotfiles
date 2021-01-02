@@ -9,11 +9,13 @@ CONDA_PACKAGES=(
     automake
     bash
     bash-completion
+    bison
     coreutils
     curl
     ctags
     c-compiler
     findutils
+    flex
     gawk
     git
     hunspell

@@ -28,6 +28,7 @@ if [ -f "$HOME/.bash_profile.local" ]; then
     . "$HOME/.bash_profile.local"
 fi
 
+prepend_to PATH "/Applications/DjView.app/Contents/bin/"
 prepend_to PATH "$HOME/opt/Macaulay2/bin"
 prepend_to PATH "$HOME/.local/bin"
 prepend_to PATH "$HOME/.bin_mac"
