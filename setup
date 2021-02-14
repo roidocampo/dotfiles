@@ -36,11 +36,6 @@ CONDA_PACKAGES=(
     wget
 )
 
-GTK_PACKAGES=(
-    gtk3
-    pygobject
-)
-
 SAGE_PACKAGES=(
     jupyterlab
     sage
@@ -68,6 +63,21 @@ JUPYTER_PIPS=(
     sjk
 )
 
+DEV_PACKAGES=(
+    qt
+    mupdf
+    pyqt
+)
+
+DEV_LOCAL_PACKAGES=(
+    djvulibre
+)
+
+DEV_PIPS=(
+    PyMuPDF
+    python-djvulibre
+)
+
 ########################################################################
 # conda base
 ########################################################################
@@ -92,7 +102,11 @@ show_help() {
         "./setup sage"     "  ::  setup sage environment in conda"
     [ "X$UNAME_KERNEL" = "XDarwin" ] && \
     box_row 16 35 \
-        "./setup gtk"      "  ::  setup gtk environment in conda"
+        "./setup dev"      "  ::  setup dev environment in conda"
+    box_row 16 35 \
+        "./setup killdev"  "  ::  remove dev environment in conda"
+    box_row 16 35 \
+        "./setup djvu"     "  ::  build djvulibre library"
     box_row 16 35 \
         "./setup help"     "  ::  print this help"
     box_end
@@ -334,10 +348,14 @@ setup_conda() {
     conda config --add channels conda-forge 2>/dev/null
     conda config --set channel_priority strict 2>/dev/null
 
+    box_row 1 33 "*" "Configuring base environment"
+
+    conda install --name base conda-build mamba
+
     box_row 1 33 "*" "Creating conda environment \`env0\`"
     box_end
 
-    conda create --name env0 "${CONDA_PACKAGES[@]}"
+    mamba create --name env0 "${CONDA_PACKAGES[@]}"
 
     printf '\n'
 
@@ -398,9 +416,11 @@ setup_conda_env() {
     shift
     local ENV_NAME="$1"
     shift
+    local ENV_PACKAGES="$1"
+    shift
     local ENV_PIPS="$1"
     shift
-    local ENV_PACKAGES=("$@")
+    local ENV_LOCAL_PACKAGES="$1"
 
     box_start "$BOX_TITLE SETUP"
     box_row 1 33 "*" "Checking current setup"
@@ -426,8 +446,20 @@ setup_conda_env() {
     box_row 1 33 "*" "Creating and activating conda environment \`$ENV_NAME\`"
     box_end
 
-    conda create --name "$ENV_NAME" "${CONDA_PACKAGES[@]}" "${ENV_PACKAGES[@]}"
+    mamba create --name "$ENV_NAME" "${CONDA_PACKAGES[@]}" $ENV_PACKAGES
 
+
+    if [ "$ENV_LOCAL_PACKAGES" ]; then
+
+        conda activate "$ENV_NAME"
+
+        box_start "CONTINUING $BOX_TITLE SETUP"
+        box_row 1 33 "*" "Installing extra packages via pip"
+        box_end
+
+        mamba install --name "$ENV_NAME" --channel local $ENV_LOCAL_PACKAGES
+
+    fi
 
     if [ "$ENV_PIPS" ]; then
 
@@ -450,14 +482,6 @@ setup_conda_env() {
 }
 
 ########################################################################
-# setup_gt
-########################################################################
-
-setup_gtk() {
-    setup_conda_env "GTK" "env-gtk" "" "${GTK_PACKAGES[@]}"
-}
-
-########################################################################
 # setup_jupyter
 ########################################################################
 
@@ -465,8 +489,8 @@ setup_jupyter() {
     setup_conda_env \
         "JUPYTER" \
         "env-jupyter" \
-        "${JUPYTER_PIPS[*]}" \
-        "${JUPYTER_PACKAGES[@]}"
+        "${JUPYTER_PACKAGES[*]}" \
+        "${JUPYTER_PIPS[*]}"
 }
 
 ########################################################################
@@ -477,8 +501,98 @@ setup_sage() {
     setup_conda_env \
         "SAGE" \
         "env-sage" \
-        "${SAGE_PIPS[*]}" \
-        "${SAGE_PACKAGES[@]}"
+        "${SAGE_PACKAGES[*]}" \
+        "${SAGE_PIPS[*]}"
+}
+
+########################################################################
+# setup_dev
+########################################################################
+
+setup_dev() {
+    setup_conda_env \
+        "DEV" \
+        "env-dev" \
+        "${DEV_PACKAGES[*]}" \
+        "${DEV_PIPS[*]}" \
+        "${DEV_LOCAL_PACKAGES[*]}"
+}
+
+########################################################################
+# remove_dev
+########################################################################
+
+remove_dev() {
+    box_start "REMOVING DEV ENVIRONMENT"
+    box_row 1 33 "*" "Checking current setup"
+
+    if ! conda_exists; then
+        box_row 1 31 "!" "Conda not setup (please install conda first)"
+        box_end
+        return
+    fi
+
+    if ! conda_env_exists "env-dev"; then
+        box_row 1 31 "!" "Conda environment \`env-dev\` does not exist"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Loading and activating conda"
+
+    # shellcheck disable=SC1090
+    . "$CONDA_BASE/etc/profile.d/conda.sh"
+    conda activate base
+
+    box_row 1 33 "*" "Removing conda environment \`env-dev\`"
+    box_end
+
+    conda remove --name "env-dev" --all
+
+    printf '\n'
+
+    box_start "CONTINUING - REMOVING DEV ENVIRONMENT"
+    box_row 1 33 "*" "Done!"
+    box_end
+}
+
+########################################################################
+# build_djvu
+########################################################################
+
+build_djvu() {
+    box_start "BUILDING DJVULIBRE"
+    box_row 1 33 "*" "Checking current setup"
+
+    if ! conda_exists; then
+        box_row 1 31 "!" "Conda not setup (please install conda first)"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Loading and activating conda"
+
+    # shellcheck disable=SC1090
+    . "$CONDA_BASE/etc/profile.d/conda.sh"
+    conda activate base
+
+    box_row 1 33 "*" "Changing diretory"
+
+    DOTFILES_DIR_NAME=$(dirname "$(true_path "$0")")
+    RECIPES_DIR_NAME=$DOTFILES_DIR_NAME/conda_recipes
+
+    cd "$RECIPES_DIR_NAME"
+
+    box_row 1 33 "*" "Building package"
+    box_end
+
+    conda build djvulibre
+
+    printf '\n'
+
+    box_start "CONTINUING - BUILDING DJVULIBRE"
+    box_row 1 33 "*" "Done!"
+    box_end
 }
 
 ########################################################################
@@ -506,7 +620,9 @@ main() {
             conda) setup_conda; exit ;;
             jupyter) setup_jupyter; exit ;;
             sage) setup_sage; exit ;;
-            gtk) setup_gtk; exit ;;
+            dev) setup_dev; exit ;;
+            killdev) remove_dev; exit ;;
+            djvu) build_djvu; exit ;;
         esac
     fi
 

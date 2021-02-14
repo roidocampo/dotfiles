@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PYTHON_BINARY=$HOME/opt/miniconda3/envs/env-gtk/bin/python
+PYTHON_BINARY=$HOME/opt/miniconda3/envs/env-dev/bin/python
 PYTHON_SCRIPT=ollo.py
 
 exec 1> ~/.ollo_errors.log
