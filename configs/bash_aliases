@@ -277,6 +277,23 @@ else
 fi
 
 ########################################################################
+# conda activation/deactivation
+########################################################################
+
+function _custom_conda_activate() {
+    if [ "$1" ]; then
+        conda activate env-"$1"
+    elif [ -f "environment.yml" ]; then
+        conda activate $(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+    else
+        echo "What Conda environment do you want to activate?"
+    fi
+}
+
+alias activate='_custom_conda_activate'
+alias deactivate='conda deactivate'
+
+########################################################################
 # 
 ########################################################################
 

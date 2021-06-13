@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+PARENT_PID="$1"
+PARENT_PWD="$2"
+SPLIT_ARG="$3"
+DIRECTION_ARG="$4"
+
+ENV_ARGS=()
+ENV_FILE=~/.tmux_env_pid/"$PARENT_PID"
+
+if [ -f "$ENV_FILE" ]; then
+    readarray ENV_LINES < "$ENV_FILE"
+    for ENV_LINE in ${ENV_LINES[@]}; do
+        ENV_ARGS+=(-e "$ENV_LINE")
+    done
+fi
+
+tmux split-window $SPLIT_ARG $DIRECTION_ARG "${ENV_ARGS[@]}" -c "$PARENT_PWD"

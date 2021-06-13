@@ -40,10 +40,37 @@ prompt_color=31
 
 export PS1='\[\033[00;${prompt_color}m\]${prompt}\[\033[00m\] '
 
+PREVIOUS_CONDA_ENV=${INITIAL_CONDA_ENV_ENV}
+
+function cleanup_tmux_pid_files {
+    (
+        shopt -s nullglob
+        mkdir -p ~/.tmux_env_pid
+        cd ~/.tmux_env_pid
+        for pid in *; do
+            if ! kill -0 "$pid" > /dev/null 2>&1; then
+                rm -f "$pid"
+            fi
+        done
+    )
+    rm -f ~/.tmux_env_pid/"$$"
+}
+
+trap cleanup_tmux_pid_files EXIT
+
 function set_conda_prompt {
     if [ "${INITIAL_CONDA_ENV}" = "${CONDA_DEFAULT_ENV}" ]; then
+        if [ "${PREVIOUS_CONDA_ENV}" != "${CONDA_DEFAULT_ENV}" ]; then
+            PREVIOUS_CONDA_ENV=${CONDA_DEFAULT_ENV}
+            cleanup_tmux_pid_files
+        fi
         prompt=${default_prompt}
     else
+        if [ "${PREVIOUS_CONDA_ENV}" != "${CONDA_DEFAULT_ENV}" ]; then
+            PREVIOUS_CONDA_ENV=${CONDA_DEFAULT_ENV}
+            cleanup_tmux_pid_files
+            env > ~/.tmux_env_pid/"$$"
+        fi
         prompt="(${CONDA_DEFAULT_ENV})"
     fi
 }

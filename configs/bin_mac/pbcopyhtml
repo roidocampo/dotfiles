@@ -1,0 +1,2 @@
+#!/bin/sh
+printf "set the clipboard to «data HTML$(cat $@ | hexdump -ve '1/1 "%.2x"')»" | osascript -

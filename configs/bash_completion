@@ -6,4 +6,25 @@ complete -o default -f -X '!*.+(pdf|pdfd|app)' open
 complete -o default -f -X '!*.+(pdf|pdfd)' skim
 complete -o default -f -X '!*.+(pdf|pdfd)' acrobat
 
+function _custom_conda_activate_completion_aux() {(
+    shopt -s nullglob
+    ENVS_DIR=~/opt/miniconda3/envs
+    if [ -d "$ENVS_DIR" ]; then
+        cd "$ENVS_DIR"
+        for DIR in *; do
+            if [ "$DIR" != "env0" ]; then
+                echo "${DIR##*-}"
+            fi
+        done
+    fi
+)}
+
+function _custom_conda_activate_completion() {
+    #COMPREPLY+=( $(_custom_conda_activate_completion_aux) )
+    COMPREPLY=($(compgen -W "$(_custom_conda_activate_completion_aux)" "${COMP_WORDS[1]}"))
+
+}
+
+complete -F _custom_conda_activate_completion activate
+
 # vi: ft=bash

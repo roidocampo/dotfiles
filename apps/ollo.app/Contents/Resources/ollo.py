@@ -5,6 +5,7 @@
 
 import itertools
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -454,7 +455,7 @@ class EmptyDocucment:
     page_class = EmptyPage
     doc_type = "Unknown"
     cache_size_limit = 20
-    external_command = None
+    external_command = 'open -a Preview "{}"'
     external_command_2 = None
 
     def __init__(self, file_name):
@@ -1151,7 +1152,10 @@ class PdfPage(EmptyPage):
 
     def copy_selection(self, rect):
         if self.text_page is None:
-            self.text_page = self.display_list.getTextPage()
+            try:
+                self.text_page = self.display_list.getTextPage()
+            except:
+                return
         if self.page_words is None:
             words = []
             self.text_page.extractWORDS(words)
@@ -1284,6 +1288,13 @@ class DjvuView(DocumentView):
     document_class = DjvuDocument
 
 ########################################################################
+# DjvuView
+########################################################################
+
+class PsView(DocumentView):
+    document_class = ErrorDocucment
+
+########################################################################
 # create_view
 ########################################################################
 
@@ -1293,6 +1304,8 @@ def create_view(window, file):
     file_ext = file_path.suffix
     if file_ext == ".pdf":
         view_class = PdfView
+    elif file_ext == ".ps":
+        view_class = PsView
     elif file_ext == ".djvu":
         view_class = DjvuView
     else:
@@ -1433,6 +1446,194 @@ class SideBar(QListWidget):
 
 
 ########################################################################
+# ModQLineEdit
+########################################################################
+
+class ModQLineEdit(QLineEdit):
+
+    def __init__(self, parent, *args):
+        self._parent = parent
+        super().__init__(*args)
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        if k == Qt.Key_Enter:
+            return self._parent.accept()
+        if k == Qt.Key_Down:
+            return self._parent.move_sel(1)
+        if k == Qt.Key_Up:
+            return self._parent.move_sel(-1)
+        super().keyPressEvent(e)
+
+
+########################################################################
+# OpenPaperDialog
+########################################################################
+
+class OpenPaperDialog(QDialog):
+
+    _css = """
+        QTableWidget::item:selected {
+            color: black;
+            background-color: #ccc;
+        }
+    """
+
+    def __init__(self, parent, *args):
+        self._parent = parent
+        super().__init__(parent)
+
+        self.setStyleSheet(self._css)
+
+        self.setWindowTitle("Hola")
+        self.setWindowModality(Qt.WindowModal)
+
+        self.layout = QGridLayout(self)
+        self.setLayout(self.layout)
+        self.layout.setColumnMinimumWidth(0, 1200)
+        self.layout.setRowMinimumHeight(2, 650)
+
+        self.label = QLabel("Search Papers:")
+        self.layout.addWidget(self.label, 0, 0)
+
+        self.search_box = ModQLineEdit(self)
+        self.label.setBuddy(self.search_box)
+        self.search_box.textChanged.connect(self.update_table)
+        self.layout.addWidget(self.search_box, 1, 0)
+
+        self.table = QTableWidget(0,3)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.cellClicked.connect(self.on_cell_click)
+        self.table.cellDoubleClicked.connect(self.on_cell_double_click)
+        self.table.setHorizontalHeaderLabels(["Author(s)", "Title", "Year"]);
+        self.table.setColumnWidth(0, 285)
+        self.table.setColumnWidth(1, 850)
+        self.table.setColumnWidth(2, 60)
+        self.table.verticalHeader().hide()
+        self.table.setShowGrid(False)
+        self.layout.addWidget(self.table, 2, 0)
+
+        self.buttonBox = QDialogButtonBox(Qt.Horizontal)
+        self.openButton = QPushButton("Open", self)
+        self.buttonBox.addButton(self.openButton, QDialogButtonBox.AcceptRole)
+        self.cancelButton = QPushButton("Cancel", self)
+        self.buttonBox.addButton(self.cancelButton, QDialogButtonBox.RejectRole)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        self.layout.addWidget(self.buttonBox, 3, 0)
+
+        self.populate_files()
+        self.populate_table()
+
+    def populate_table(self):
+        self.visible_rows = []
+        self.current_row = 0
+        for i, (author, year, title) in enumerate(self.file_data):
+            self.table.insertRow(i)
+            self.table.setItem(i, 0, QTableWidgetItem(author))
+            self.table.setItem(i, 1, QTableWidgetItem(title))
+            self.table.setItem(i, 2, QTableWidgetItem(year))
+            self.table.setRowHeight(i, 25)
+            self.table.hideRow(i)
+
+    def populate_files(self):
+        home = Path.home()
+        zotero = home / "Dropbox" / "Family Room" / "Roi's Library"
+        pat = re.compile(r"""
+            ^
+            (?P<authors>.*)
+            _(?P<year>\d\d\d\d)?_
+            (?P<title>.*)
+            \.(?P<ext>pdf|djvu)
+            $
+        """, re.VERBOSE)
+        self.file_data = []
+        self.files = []
+        if not zotero.is_dir():
+            return
+        for f in sorted(zotero.iterdir(), key=lambda f: f.name.lower()):
+            if not f.is_file():
+                continue
+            self.files.append(f)
+            if m:= pat.match(f.name):
+                self.file_data.append([
+                    m.group("authors").replace("_", " "),
+                    m.group("year"),
+                    m.group("title").replace("_", " "),
+                ])
+            else:
+                self.file_data.append(["","",f.name])
+
+    def update_table(self, search_string=None):
+        if search_string:
+            match = re.compile(
+                r"^(?=.*"
+                + re.sub(
+                    r"\s+",
+                    r")(?=.*",
+                    search_string
+                )
+                + r").*$",
+                re.IGNORECASE
+            ).match
+        else:
+            match = lambda x: False
+        sel = False
+        self.visible_rows = []
+        self.current_row = 0
+        for i, f in enumerate(self.files):
+            if match(f.name):
+                self.table.showRow(i)
+                if not sel:
+                    self.table.selectRow(i)
+                    sel = True
+                self.visible_rows.append(i)
+            else:
+                self.table.hideRow(i)
+
+    def move_sel(self, delta=1):
+        if not self.visible_rows:
+            return
+        self.current_row = (self.current_row + delta) % len(self.visible_rows)
+        i = self.visible_rows[self.current_row]
+        self.table.selectRow(i)
+
+    def on_cell_click(self, i, j):
+        for c, i1 in enumerate(self.visible_rows):
+            if i1 == i:
+                self.current_row = c
+                self.table.selectRow(i)
+                break
+        self.search_box.setFocus()
+
+    def on_cell_double_click(self, i, j):
+        for c, i1 in enumerate(self.visible_rows):
+            if i1 == i:
+                self.current_row = c
+                self.table.selectRow(i)
+                break
+        self.accept()
+
+    def exec(self, *args, **kws):
+        view = self._parent.stack.currentWidget()
+        view.releaseKeyboard()
+        self.search_box.grabKeyboard()
+        ec = super().exec(*args, **kws)
+        self.search_box.releaseKeyboard()
+        view.grabKeyboard()
+        return ec
+
+
+    def selectedFiles(self):
+        if not self.visible_rows:
+            return
+        i = self.visible_rows[self.current_row]
+        yield self.files[i]
+        
+
+
+########################################################################
 # ViewerMainWindow
 ########################################################################
 
@@ -1478,6 +1679,7 @@ class ViewerMainWindow(QMainWindow):
         self.menubar = QMenuBar()
         self.main_menu = self.menubar.addMenu("ollo")
         self.menu_actions = []
+        self.key_actions = []
         for title, key, handler, role in (
             ["About ollo", None, None, None],
             ["separator", None, None, None],
@@ -1527,6 +1729,8 @@ class ViewerMainWindow(QMainWindow):
                 act.setEnabled(False)
             elif handler is not None:
                 act.triggered.connect(handler)
+            if key is not None and handler is not False:
+                self.key_actions.append(act)
             self.menu_actions.append(act)
             self.main_menu.addAction(act)
 
@@ -1629,6 +1833,11 @@ class ViewerMainWindow(QMainWindow):
             self.qapp.quit()
 
     def open_dialog(self, *args):
+        dia = OpenPaperDialog(self)
+        if dia.exec():
+            for file in dia.selectedFiles():
+                self.add_view(file)
+        return
         dia = QFileDialog(self)
         dia.setWindowFlags(Qt.Sheet)
         dia.setFileMode(QFileDialog.ExistingFiles)
