@@ -10,17 +10,19 @@ CONDA_PACKAGES=(
     bash
     bash-completion
     bison
-    coreutils
-    curl
-    ctags
     c-compiler
+    cmake
+    coreutils
+    ctags
+    curl
     findutils
     flex
     gawk
     git
+    git-subrepo
+    htop
     hunspell
     hunspell-en
-    htop
     imagemagick
     ipython
     libtool
@@ -32,8 +34,8 @@ CONDA_PACKAGES=(
     tmux
     tree
     vim
-    which
     wget
+    which
 )
 
 SAGE_PACKAGES=(

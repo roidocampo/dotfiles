@@ -27,4 +27,11 @@ function _custom_conda_activate_completion() {
 
 complete -F _custom_conda_activate_completion activate
 
+function _myenv_completion() {
+    COMPREPLY=($(compgen -W "init create remove" "${COMP_WORDS[1]}"))
+
+}
+
+complete -F _myenv_completion myenv
+
 # vi: ft=bash
