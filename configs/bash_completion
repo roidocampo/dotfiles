@@ -6,7 +6,7 @@ complete -o default -f -X '!*.+(pdf|pdfd|app)' open
 complete -o default -f -X '!*.+(pdf|pdfd)' skim
 complete -o default -f -X '!*.+(pdf|pdfd)' acrobat
 
-function _custom_conda_activate_completion_aux() {(
+function _cenv_compl_aux() {(
     shopt -s nullglob
     ENVS_DIR=~/opt/miniconda3/envs
     if [ -d "$ENVS_DIR" ]; then
@@ -19,19 +19,28 @@ function _custom_conda_activate_completion_aux() {(
     fi
 )}
 
-function _custom_conda_activate_completion() {
-    #COMPREPLY+=( $(_custom_conda_activate_completion_aux) )
-    COMPREPLY=($(compgen -W "$(_custom_conda_activate_completion_aux)" "${COMP_WORDS[1]}"))
+function _cenv_compl() {
+    local CENV_ARGS=(
+        -init
+        -create
+        -remove
+        -deactivate
+        -usage
+        -help
+    )
+    COMPREPLY=(
+        $(compgen \
+            -W \
+            "$(_cenv_compl_aux) ${CENV_ARGS[*]}" \
+            -- \
+            "${COMP_WORDS[1]}" \
+        )
+    )
 
 }
 
-complete -F _custom_conda_activate_completion activate
-
-function _myenv_completion() {
-    COMPREPLY=($(compgen -W "init create remove" "${COMP_WORDS[1]}"))
-
-}
-
-complete -F _myenv_completion myenv
+complete -F _cenv_compl cenv
+complete -F _cenv_compl act
+complete -F _cenv_compl activate
 
 # vi: ft=bash

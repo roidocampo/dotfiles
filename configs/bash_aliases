@@ -284,7 +284,7 @@ function cenv() {
 
     case "$1" in
 
-        init)
+        init|-init)
 
             if [ -f "environment.yml" ]; then
 
@@ -345,31 +345,42 @@ function cenv() {
 
             ;;
 
-        create)
+        create|-create)
             if [ -f "environment.yml" ]; then
                 local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
                 if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
                     echo "Please change name in environment.yml"
-                else
+                elif [ "$ENV_NAME" ]; then
+                    echo "Creating environment \`$ENV_NAME\`."
                     mamba env create --file "environment.yml"
+                else
+                    echo 'Could not determine environment from `environment.yml`.'
                 fi
+            else
+                echo 'Could not find file `environment.yml`.'
             fi
             ;;
 
-        remove)
+        remove|-remove)
             if [ -f "environment.yml" ]; then
                 local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
                 if [ "$ENV_NAME" ]; then
+                    echo "Removing environment \`$ENV_NAME\`."
                     mamba env remove --name "$ENV_NAME"
+                else
+                    echo 'Could not determine environment from `environment.yml`.'
                 fi
+            else
+                echo 'Could not find file `environment.yml`.'
             fi
             ;;
 
-        deactivate)
+        deactivate|-deactivate)
+            echo 'Deactivating current environment.'
             conda deactivate
             ;;
 
-        usage|-help|-*)
+        usage|-usage|help|-help|-*)
 
 		cat <<- USAGE
 		Usage:
@@ -390,10 +401,19 @@ function cenv() {
             ;;
 
         *)
+            local REQ_ENV
             if [ "$1" ]; then
-                conda activate env-"$1"
+                REQ_ENV=env-"$1"
             elif [ -f "environment.yml" ]; then
-                conda activate $(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+                REQ_ENV=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+            fi
+            if [ "$REQ_ENV" ]; then
+                if [ "$REQ_ENV" = "$CONDA_DEFAULT_ENV" ]; then
+                    echo "Environment \`$REQ_ENV\` already active."
+                else
+                    echo "Activating environment \`$REQ_ENV\`."
+                    conda activate "$REQ_ENV"
+                fi
             else
                 cenv usage
             fi

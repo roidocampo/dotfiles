@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+PARENT_PID="$1"
+shift
+
+ENV_ARGS=()
+ENV_FILE=~/.tmux_env_pid/"$PARENT_PID"
+
+if [ ! -f "$ENV_FILE" ]; then
+    exec bash
+fi
+
+readarray ENV_LINES < "$ENV_FILE"
+for ENV_LINE in "${ENV_LINES[@]}"; do
+    ENV_ARGS+=("${ENV_LINE%$'\n'}")
+done
+
+exec env -i "${ENV_ARGS[@]}" bash "$@"
