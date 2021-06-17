@@ -1,0 +1,196 @@
+options.color_current_row = ''
+options.color_current_col = ''
+
+options.color_default_hdr = 'fg 21 bg 19'
+options.color_current_hdr = 'fg 18 bg 2'
+options.color_bottom_hdr = '' 
+
+options.color_status = 'fg 20 bg 18'
+options.color_keystrokes = 'fg 20 bg 18' 
+options.color_active_status = 'fg 21 bg 19'
+options.color_top_status = ''
+
+options.color_edit_cell = 'fg black bg 2' 
+
+options.disp_column_sep = '│'
+
+vd.option('color_current_row_normal', 'fg 20 bg 18', 'roi: my color')
+vd.option('color_current_row_keycol', 'fg 81 cyan bg 18', 'roi: my color')
+vd.option('color_current_row_select', 'fg 215 yellow cyan bg 18', 'roi: my color')
+
+def custom_colorizer(sheet, col, row, value):
+    colors.get_color('color_current_row_normal', 10)
+    colors.get_color('color_current_row_keycol', 10)
+    colors.get_color('color_current_row_select', 10)
+    if not row:
+        return False
+    idx = sheet.rows.index(row)
+    if idx != sheet.cursorRowIndex:
+        return False
+    if col and sheet.isSelected(row):
+        return 'color_current_row_select'
+    elif col and col.keycol:
+        return 'color_current_row_keycol'
+    else:
+        return 'color_current_row_normal'
+
+TableSheet.colorizers += [
+    CellColorizer(10, None, custom_colorizer),
+]
+
+# options.batch                     = False               # replay in batch mode (with no interface and all status sent to stdout)
+# options.bulk_select_clear         = False               # clear selected rows before new bulk selections
+# options.clean_names               = False               # clean column/sheet names to be valid Python identifiers
+# options.clipboard_copy_cmd        = ''                  # command to copy stdin to system clipboard
+# options.clipboard_paste_cmd       = ''                  # command to get contents of system clipboard
+# options.cmdlog_histfile           = ''                  # file to autorecord each cmdlog action to
+# options.col_cache_size            = 0                   # max number of cache entries in each cached column
+# options.color_active_status       = 'bold'              # active window status bar color
+# options.color_add_pending         = 'green'             # color for rows pending add
+# options.color_bottom_hdr          = 'underline'         # color of the bottom header row
+# options.color_change_pending      = 'reverse yellow'    # color for cells pending modification
+# options.color_column_sep          = '246 blue'          # color of column separators
+# options.color_current_col         = 'bold'              # color of the cursor column
+# options.color_current_hdr         = 'bold reverse'      # color of the header for the cursor column
+# options.color_current_row         = 'reverse'           # color of the cursor row
+# options.color_default             = 'white on black'    # the default fg and bg colors
+# options.color_default_hdr         = 'bold'              # color of the column headers
+# options.color_delete_pending      = 'red'               # color for rows pending delete
+# options.color_edit_cell           = 'white'             # cell color to use when editing cell
+# options.color_error               = 'red'               # error message color
+# options.color_graph_axis          = 'bold'              # color for graph axis labels
+# options.color_graph_hidden        = '238 blue'          # color of legend for hidden attribute
+# options.color_graph_selected      = 'bold'              # color of selected graph points
+# options.color_hidden_col          = '8'                 # color of hidden columns on metasheets
+# options.color_inactive_status     = '8'                 # inactive window status bar color
+# options.color_key_col             = '81 cyan'           # color of key columns
+# options.color_keystrokes          = 'white'             # color of input keystrokes on status line
+# options.color_note_pending        = 'bold magenta'      # color of note in pending cells
+# options.color_note_row            = '220 yellow'        # color of row note on left edge
+# options.color_note_type           = '226 yellow'        # color of cell note for non-str types in anytype columns
+# options.color_selected_row        = '215 yellow'        # color of selected rows
+# options.color_status              = 'bold'              # status line color
+# options.color_status_replay       = 'green'             # color of replay status indicator
+# options.color_top_status          = 'underline'         # top window status bar color
+# options.color_warning             = 'yellow'            # warning message color
+# options.color_working             = 'green'             # color of system running smoothly
+# options.color_xword_active        = 'green'             # color of active clue
+# options.config                    = '~/.visidatarc'     # config file to exec in Python
+# options.confirm_overwrite         = True                # whether to prompt for overwrite confirmation on save
+# options.csv_delimiter             = ','                 # delimiter passed to csv.reader
+# options.csv_dialect               = 'excel'             # dialect passed to csv.reader
+# options.csv_escapechar            = None                # escapechar passed to csv.reader
+# options.csv_lineterminator        = '\r\n'              # lineterminator passed to csv.writer
+# options.csv_quotechar             = '"'                 # quotechar passed to csv.reader
+# options.csv_skipinitialspace      = True                # skipinitialspace passed to csv.reader
+# options.debug                     = False               # exit on error and display stacktrace
+# options.default_colname           = ''                  # column name to use for non-dict rows
+# options.default_height            = 10                  # default column height
+# options.default_sample_size       = 100                 # number of rows to sample for regex.split
+# options.default_width             = 20                  # default column width
+# options.delimiter                 = '\t'                # field delimiter to use for tsv/usv filetype
+# options.describe_aggrs            = 'mean stdev'        # numeric aggregators to calculate on Describe sheet
+# options.dir_hidden                = False               # load hidden files on DirSheet
+# options.dir_recurse               = False               # walk source path recursively on DirSheet
+# options.disp_ambig_width          = 1                   # width to use for unicode chars marked ambiguous
+# options.disp_column_sep           = '|'                 # separator between columns
+# options.disp_currency_fmt         = '%.02f'             # default fmtstr to format for currency values
+# options.disp_date_fmt             = '%Y-%m-%d'          # default fmtstr to strftime for date values
+# options.disp_edit_fill            = '_'                 # edit field fill character
+# options.disp_endbot_sep           = '║'                 #
+# options.disp_endmid_sep           = '║'                 #
+# options.disp_endtop_sep           = '║'                 #
+# options.disp_error_val            = ''                  # displayed contents for computation exception
+# options.disp_float_fmt            = '{:.02f}'           # default fmtstr to format for float values
+# options.disp_histogram            = '*'                 # histogram element character
+# options.disp_histolen             = 50                  # width of histogram column
+# options.disp_int_fmt              = '{:.0f}'            # default fmtstr to format for int values
+# options.disp_keybot_sep           = '║'                 #
+# options.disp_keycol_sep           = '║'                 # separator between key columns and rest of columns
+# options.disp_keymid_sep           = '║'                 #
+# options.disp_keytop_sep           = '║'                 #
+# options.disp_lstatus_max          = 0                   # maximum length of left status line
+# options.disp_more_left            = '<'                 # header note indicating more columns to the left
+# options.disp_more_right           = '>'                 # header note indicating more columns to the right
+# options.disp_note_none            = '⌀'                 # visible contents of a cell whose value is None
+# options.disp_oddspace             = '·'                 # displayable character for odd whitespace
+# options.disp_pending              = ''                  # string to display in pending cells
+# options.disp_pixel_random         = False               # randomly choose attr from set of pixels instead of most common
+# options.disp_replay_pause         = '‖'                 # status indicator for paused replay
+# options.disp_replay_play          = '▶'                 # status indicator for active replay
+# options.disp_rowbot_sep           = '⁝'                 #
+# options.disp_rowend_sep           = '║'                 #
+# options.disp_rowmid_sep           = '⁝'                 #
+# options.disp_rowtop_sep           = '|'                 #
+# options.disp_rstatus_fmt          = ' {sheet.longname} {sheet.nRows:9d} {sheet.rowtype} {sheet.options.disp_selected_note}{sheet.nSelectedRows}' # right-side status format string
+# options.disp_selected_note        = '•'                 #
+# options.disp_sort_asc             = '↑↟⇞⇡⇧⇑'            # characters for ascending sort
+# options.disp_sort_desc            = '↓↡⇟⇣⇩⇓'            # characters for descending sort
+# options.disp_splitwin_pct         = 0                   # height of second sheet on screen
+# options.disp_status_fmt           = '{sheet.shortcut}› {sheet.name}| '  # status line prefix
+# options.disp_status_sep           = ' | '               # separator between statuses
+# options.disp_truncator            = '…'                 # indicator that the contents are only partially visible
+# options.disp_unprintable          = '·'                 # substitute character for unprintables
+# options.encoding                  = 'utf-8'             # encoding passed to codecs.open
+# options.encoding_errors           = 'surrogateescape'   # encoding_errors passed to codecs.open
+# options.expand_col_scanrows       = 1000                number of rows to check when expanding columns (0 = all)
+# options.fancy_chooser             = False               # a nicer selection interface for aggregators and jointype
+# options.filetype                  = ''                  # specify file type
+# options.fixed_maxcols             = 0                   # max number of fixed-width columns to create (0 is no max)
+# options.fixed_rows                = 1000                # number of rows to check for fixed width columns
+# options.force_256_colors          = False               # use 256 colors even if curses reports fewer
+# options.graphviz_edge_labels      = True                # whether to include edge labels on graphviz diagrams
+# options.header                    = 1                   # parse first N rows as column names
+# options.histogram_bins            = 0                   # number of bins for histogram of numeric columns
+# options.html_title                = '<h2>{sheet.name}</h2>' # table header when saving to html
+# options.http_max_next             = 0                   # max next.url pages to follow in http response
+# options.imports                   = 'plugins'           # imports to preload before .visidatarc (command-line only)
+# options.incr_base                 = 1.0                 # start value for column increments
+# options.input_history             = ''                  # basename of file to store persistent input history
+# options.json_indent               = None                # indent to use when saving json
+# options.json_sort_keys            = False               # sort object keys when saving to json
+# options.load_lazy                 = False               # load subsheets always (False) or lazily (True)
+# options.min_memory_mb             = 0                   # minimum memory to continue loading and async processing
+# options.motd_url                  = 'https://visidata.org/motd-2.4' # source of randomized startup messages
+# options.mouse_interval            = 1                   # max time between press/release for click (ms)
+# options.name_joiner               = '_'                 # string to join sheet or column names
+# options.note_format_exc           = '?'                 # cell note for an exception during formatting
+# options.note_getter_exc           = '!'                 # cell note for an exception during computation
+# options.note_pending              = '⌛'               # note to display for pending cells
+# options.note_type_exc             = '!'                 # cell note for an exception during type conversion
+# options.null_value                = None                # a value to be counted as null
+# options.numeric_binning           = False               # bin numeric columns into ranges
+# options.output                    = None                # save the final visible sheet to output at the end of replay
+# options.pcap_internet             = 'n'                 # (y/s/n) if save_dot includes all internet hosts separately (y), combined (s), or does not include the internet (n)
+# options.pdf_tables                = False               # parse PDF for tables instead of pages of text
+# options.play                      = ''                  # file.vd to replay
+# options.plot_colors               = 'green red yellow cyan magenta white 38 136 168'   # list of distinct colors to use for plotting distinct objects
+# options.plugins_url               = 'https://visidata.org/plugins/plugins.jsonl'       # source of plugins sheet
+# options.postgres_schema           = 'public'            # The desired schema for the Postgres database
+# options.preplay                   = ''                  # longnames to preplay before replay
+# options.profile                   = ''                  # filename to save binary profiling data
+# options.quitguard                 = False               # confirm before quitting last sheet
+# options.regex_flags               = 'I'                 # flags to pass to re.compile() [AILMSUX]
+# options.regex_maxsplit            = 0                   # maxsplit to pass to regex.split
+# options.replay_movement           = False               # insert movements during replay
+# options.replay_wait               = 0.0                 # time to wait between replayed commands, in seconds
+# options.row_delimiter             = '\n'                # row delimiter to use for tsv/usv filetype
+# options.rowkey_prefix             = 'キ'                # string prefix for rowkey in the cmdlog
+# options.safe_error                = '# ERR'             # error string to use while saving
+# options.safety_first              = False               # sanitize input/output to handle edge cases, with a performance cost
+# options.save_filetype             = 'tsv'               # specify default file type to save as
+# options.scroll_incr               = 3                   # amount to scroll with scrollwheel
+# options.show_graph_labels         = True                # show axes and legend on graph
+# options.skip                      = 0                   # skip N rows before header
+# options.some_selected_rows        = False               # if no rows selected, if True, someSelectedRows returns all rows; if False, fails
+# options.textwrap_cells            = True                # wordwrap text for multiline rows
+# options.tsv_safe_newline          = '\x1e'              # replacement for newline character when saving to tsv
+# options.tsv_safe_tab              = '\x1f'              # replacement for tab character when saving to tsv
+# options.undo                      = True                # enable undo/redo
+# options.value_joiner              = ' '                 # string to join display values
+# options.visibility                = 0                   # visibility level (0=low, 1=high)
+# options.visidata_dir              = '~/.visidata/'      # directory to load and store additional files
+# options.wrap                      = False               # wrap text to fit window width on TextSheet
+# options.zoom_incr                 = 2.0                 # amount to multiply current zoomlevel when zooming
+
+# vi: ft=python

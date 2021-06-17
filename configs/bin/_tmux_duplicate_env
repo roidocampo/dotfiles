@@ -12,7 +12,13 @@ fi
 
 readarray ENV_LINES < "$ENV_FILE"
 for ENV_LINE in "${ENV_LINES[@]}"; do
-    ENV_ARGS+=("${ENV_LINE%$'\n'}")
+    if ! [[ $ENV_LINE == TMUX* ]]; then
+        ENV_ARGS+=("${ENV_LINE%$'\n'}")
+    fi
+done
+
+for V in "${!TMUX@}"; do
+    ENV_ARGS+=("$V=${!V}")
 done
 
 exec env -i "${ENV_ARGS[@]}" bash "$@"
