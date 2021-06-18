@@ -5,34 +5,21 @@ target_pane = None
 
 def init_target_pane():
     global target_pane
-    o1 = check_output([
-        'tmux',
-        'display',
-        '-p',
-        '#D'
-    ])
+    o1 = check_output(['tmux', 'display', '-p', '#D'])
     current_pane = o1.strip()
     call(['tmux', 'select-pane', '-R'])
-    o2 = check_output([
-        'tmux',
-        'display',
-        '-p',
-        '#D'
-    ])
+    o2 = check_output(['tmux', 'display', '-p', '#D'])
     default_target_pane = o2.strip()
     call(['tmux', 'set-option', 'display-time', '0'])
     call(['tmux', 'display', 'Select target pane'])
-    o3 = check_output([
-        'tmux',
-        'display-panes',
-        '-d', '0',
-        "display -p '%%'"
-    ])
-    target_pane = b"%" + o3.strip()
-    call(['tmux', 'set-option', 'display-time', '750'])
-    call(['tmux', 'display', ''])
+    call([ 'tmux', 'display-panes', '-d', '0' ])
+    o3 = check_output(['tmux', 'display', '-p', '#D'])
+    target_pane = o3.strip()
     call(['tmux', 'select-pane', '-t', current_pane])
-    if target_pane == b"%":
+    call(['tmux', 'set-option', 'display-time', '1'])
+    call(['tmux', 'display', ''])
+    call(['tmux', 'set-option', 'display-time', '750'])
+    if target_pane == b"":
         target_pane = default_target_pane
     if current_pane == target_pane:
         target_pane = None
@@ -69,7 +56,7 @@ def send_line():
 def is_comment_line(line):
     if not line:
         return False
-    elif line[0] == "#":
+    elif line[:2] == "##":
         return True
     elif line[:2] == "//":
         return True
