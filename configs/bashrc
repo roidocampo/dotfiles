@@ -63,6 +63,9 @@ function set_conda_prompt {
         if [ "${PREVIOUS_CONDA_ENV}" != "${CONDA_DEFAULT_ENV}" ]; then
             PREVIOUS_CONDA_ENV=${CONDA_DEFAULT_ENV}
             cleanup_tmux_pid_files
+            if hash tmux 2>/dev/null; then
+                tmux rename-window bash
+            fi
         fi
         prompt=${default_prompt}
     else
@@ -70,6 +73,9 @@ function set_conda_prompt {
             PREVIOUS_CONDA_ENV=${CONDA_DEFAULT_ENV}
             cleanup_tmux_pid_files
             env > ~/.tmux_env_pid/"$$"
+            if hash tmux 2>/dev/null; then
+                tmux rename-window "${CONDA_DEFAULT_ENV##env-?(dev-)}"
+            fi
         fi
         prompt="(${CONDA_DEFAULT_ENV})"
     fi
