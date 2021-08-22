@@ -1,0 +1,14 @@
+[Unit]
+Description=lab
+After=network.target
+
+[Service]
+ExecStart=%h/.dotfiles/services/lab/run-lab
+KillMode=process
+IgnoreSIGPIPE=true
+Restart=always
+RestartSec=3
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

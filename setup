@@ -93,6 +93,8 @@ CONDA_BASE=$HOME/opt/miniconda3
 show_help() {
 
     UNAME_KERNEL=$(uname)
+    DOTFILES_DIR_NAME=$(dirname "$(true_path "$0")")
+
     box_start "DOTFILES"
     box_row 16 35 \
         "./setup dotfiles" "  ::  setup configuration files in \$HOME"
@@ -105,10 +107,18 @@ show_help() {
     [ "X$UNAME_KERNEL" = "XDarwin" ] && \
     box_row 16 35 \
         "./setup dev"      "  ::  setup dev environment in conda"
+    [ "X$UNAME_KERNEL" = "XDarwin" ] && \
     box_row 16 35 \
         "./setup killdev"  "  ::  remove dev environment in conda"
+    [ "X$UNAME_KERNEL" = "XDarwin" ] && \
     box_row 16 35 \
         "./setup djvu"     "  ::  build djvulibre library"
+    [ -d "$DOTFILES_DIR_NAME/services/ngrok" ] && \
+    box_row 16 35 \
+        "./setup ngrok"    "  ::  setup ngrok service"
+    [ -d "$DOTFILES_DIR_NAME/services/lab" ] && \
+    box_row 16 35 \
+        "./setup lab"      "  ::  setup jupyter lab service"
     box_row 16 35 \
         "./setup help"     "  ::  print this help"
     box_end
@@ -351,9 +361,13 @@ setup_conda() {
     conda config --set channel_priority strict 2>/dev/null
 
     box_row 1 33 "*" "Configuring base environment"
+    box_end
 
     conda install --name base conda-build mamba
 
+    printf '\n'
+
+    box_start "CONTINUING CONDA SETUP"
     box_row 1 33 "*" "Creating conda environment \`env0\`"
     box_end
 
@@ -598,6 +612,87 @@ build_djvu() {
 }
 
 ########################################################################
+# setup_ngrok
+########################################################################
+
+setup_service() {
+
+    SERVICE_NAME="$1"
+
+    DOTFILES_DIR_NAME=$(dirname "$(true_path "$0")")
+    SRC_SERVICE_DIR=$DOTFILES_DIR_NAME/services/$SERVICE_NAME
+    SRC_SERVICE_FILE=$SRC_SERVICE_DIR/$SERVICE_NAME.service
+    OBJ_SERVICE_DIR=$HOME/.config/systemd/user/
+    OBJ_SERVICE_FILE=$OBJ_SERVICE_DIR/$SERVICE_NAME.service
+
+    box_start "$SERVICE_NAME.service SETUP"
+
+    box_row 1 33 "*" "Checking if user '$USER' can run systemd services"
+
+    if [ ! -e "/var/lib/systemd/linger/$USER" ]; then
+        loginctl enable-linger "$USER"
+    fi
+
+    if [ ! -e "/var/lib/systemd/linger/$USER" ]; then
+        box_row 1 31 "!" "User '$USER' cannot run systemd services"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Checking files"
+
+    if [ -e "$OBJ_SERVICE_FILE" ]; then
+        box_row 1 31 "!" "'$SERVICE_NAME.service' already configured"
+        box_end
+        return
+    fi
+
+    if [ ! -e "$SRC_SERVICE_FILE" ]; then
+        box_row 1 31 "!" "Source service file '$SERVICE_NAME.service' not found"
+        box_end
+        return
+    fi
+
+    box_row 1 33 "*" "Linking service file"
+
+    mkdir -p "$OBJ_SERVICE_DIR"
+
+    ln -s "$SRC_SERVICE_FILE" "$OBJ_SERVICE_FILE"
+
+    box_row 1 33 "*" "Reloading systemd daemon list"
+
+    systemctl --user daemon-reload
+
+    box_row 1 33 "*" "Starting service"
+
+    systemctl --user start "$SERVICE_NAME.service"
+
+    box_row 1 33 "*" "Done!"
+
+    box_end
+}
+
+########################################################################
+# setup_ngrok
+########################################################################
+
+setup_ngrok() {
+
+    setup_service "ngrok"
+
+}
+
+########################################################################
+# setup_ngrok
+########################################################################
+
+setup_lab() {
+
+    setup_service "lab"
+
+}
+
+########################################################################
 # not_implemented
 ########################################################################
 
@@ -625,6 +720,8 @@ main() {
             dev) setup_dev; exit ;;
             killdev) remove_dev; exit ;;
             djvu) build_djvu; exit ;;
+            ngrok) setup_ngrok; exit ;;
+            lab) setup_lab; exit ;;
         esac
     fi
 

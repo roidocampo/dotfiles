@@ -45,7 +45,7 @@ export EDITOR=vim
 # CONDA initiation
 ########################################################################
 
-[ -n "$ECO" ] && echo '* initiaing conda'
+[ -n "$ECO" ] && echo '* initiating conda'
 
 export CONDA_BASE=$HOME/opt/miniconda3
 

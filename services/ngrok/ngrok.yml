@@ -1,0 +1,19 @@
+authtoken: 21i3jD71boMVTX11tvXFz_2JXEQFz2QVRrZ7X7zAfWm
+log: stdout
+tunnels:
+  ssh:
+    proto: tcp
+    remote_addr: 3.tcp.ngrok.io:24818
+    addr: 22
+  rjtd:
+    proto: http
+    hostname: rjtd.ngrok.io
+    addr: 127.0.0.1:80
+    bind_tls: true
+  inspector:
+    proto: http
+    hostname: rjtd.inspect.ngrok.io
+    addr: 127.0.0.1:4040
+    auth: "user:secretpassword"
+    inspect: false
+    bind_tls: true

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+CONDA_BASE=$HOME/opt/miniconda3
+BASE_DIR="$HOME/Jupyter"
+
+mkdir -p "$BASE_DIR"
+
+cd "$BASE_DIR"
+
+. "$CONDA_BASE/etc/profile.d/conda.sh"
+
+conda activate env-sage
+
+exec jupyter lab \
+    --ServerApp.allow_remote_access=True \
+    --ServerApp.open_browser=False \
+    --ServerApp.password_required=True \
+    --ServerApp.base_url="/$USER/" \
+    --port="$((UID + 8888))"
+
