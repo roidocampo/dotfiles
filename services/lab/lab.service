@@ -1,6 +1,5 @@
 [Unit]
 Description=lab
-After=network.target
 
 [Service]
 ExecStart=%h/.dotfiles/services/lab/run-lab
@@ -11,4 +10,4 @@ RestartSec=3
 Type=simple
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

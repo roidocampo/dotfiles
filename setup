@@ -655,13 +655,28 @@ setup_service() {
 
     box_row 1 33 "*" "Linking service file"
 
+    box_end
+
     mkdir -p "$OBJ_SERVICE_DIR"
 
     ln -s "$SRC_SERVICE_FILE" "$OBJ_SERVICE_FILE"
 
+    echo
+
+    box_start "$SERVICE_NAME.service SETUP (CONTINUING)"
+
     box_row 1 33 "*" "Reloading systemd daemon list"
 
     systemctl --user daemon-reload
+
+    box_row 1 33 "*" "Enabling service"
+
+    box_end
+
+    systemctl --user enable "$SERVICE_NAME.service"
+    echo
+
+    box_start "$SERVICE_NAME.service SETUP (CONTINUING)"
 
     box_row 1 33 "*" "Starting service"
 

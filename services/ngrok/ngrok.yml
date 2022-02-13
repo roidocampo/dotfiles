@@ -5,11 +5,28 @@ tunnels:
     proto: tcp
     remote_addr: 3.tcp.ngrok.io:24818
     addr: 22
-  rjtd:
+  mariadb:
+    proto: tcp
+    remote_addr: 1.tcp.ngrok.io:24529
+    addr: 3306
+  lab_http:
     proto: http
-    hostname: rjtd.ngrok.io
+    hostname: "*.lab.rjtd.eu"
     addr: 127.0.0.1:80
-    bind_tls: true
+    bind_tls: false
+  lab_https:
+    proto: tls
+    hostname: "*.lab.rjtd.eu"
+    addr: 127.0.0.1:443
+  www_http:
+    proto: http
+    hostname: "www.rjtd.eu"
+    addr: 127.0.0.1:80
+    bind_tls: false
+  www_https:
+    proto: tls
+    hostname: "www.rjtd.eu"
+    addr: 127.0.0.1:443
   inspector:
     proto: http
     hostname: rjtd.inspect.ngrok.io

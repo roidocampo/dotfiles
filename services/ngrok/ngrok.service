@@ -1,6 +1,5 @@
 [Unit]
 Description=ngrok
-After=network.target
 
 [Service]
 ExecStart=%h/.dotfiles/services/ngrok/ngrok start --all --config %h/.dotfiles/services/ngrok/ngrok.yml
@@ -12,4 +11,4 @@ RestartSec=3
 Type=simple
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
