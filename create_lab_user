@@ -1,0 +1,321 @@
+#!/bin/bash
+
+set -e
+
+########################################################################
+# box drawing
+########################################################################
+
+box_start() {
+    TITLE=$1 
+    if [ -n "$2" ]; then
+        BOX_COLOR=$2
+    else
+        BOX_COLOR=34
+    fi
+    if [ -z "$NOT_FIRST_BOX" ]; then
+        printf '\n'
+        NOT_FIRST_BOX=true
+    fi
+    printf '  \033[00;%sm┌─── %s ' "$BOX_COLOR" "$TITLE"
+    i=0
+    padlen=$(( 74 - ${#TITLE} ))
+    while [ "$i" -lt "$padlen" ]; do
+        printf '─'
+        i=$(( i+1 ))
+    done
+    printf '┐\033[00m\n'
+    printf '  \033[00;%sm│%-79.79s│\033[00m\n' "$BOX_COLOR" ''
+}
+
+box_row() {
+    CWIDTH1=$1
+    COLOR=$2
+    COL1=$3
+    COL2=$4
+    CWIDTH2=$(( 75 - CWIDTH1 ))
+    printf '  \033[00;%sm│\033[00m  ' "$BOX_COLOR"
+    printf '\033[00;%sm' "$COLOR"
+    printf '%-*.*s' "$CWIDTH1" "$CWIDTH1" "$COL1"
+    printf '\033[00m '
+    printf '%-*.*s' "$CWIDTH2" "$CWIDTH2" "$COL2"
+    printf ' \033[00;%sm│\033[00m\n' "$BOX_COLOR"
+}
+
+box_end() {
+    printf '  \033[00;%sm│%-79.79s│\033[00m\n' "$BOX_COLOR" ''
+    printf '  \033[00;%sm└' "$BOX_COLOR"
+    i=0
+    while [ "$i" -lt 79 ]; do
+        printf '─'
+        i=$(( i+1 ))
+    done
+    printf '┘\033[00m\n\n'
+}
+
+########################################################################
+# main
+########################################################################
+
+main() {
+
+    if [ "X$1" = "X--reset" ]; then
+        RESET="reset"
+        shift
+    elif [ "X$1" = "X--full-reset" ]; then
+        RESET="reset"
+        FULLRESET="yes"
+        shift
+    fi
+
+    if [ "$#" != "1" ] ; then
+        ERROR="1"
+        USERNAME="okname"
+    else
+        USERNAME="$1"
+
+        if ! [[ "$USERNAME" =~ ^[a-z][a-z0-9]+$ ]] ; then
+            ERROR="2"
+        elif id "$USERNAME" &>/dev/null; then
+            if [ -z "$RESET" ]; then
+                ERROR="3"
+            fi
+        elif [ -n "$RESET" ]; then
+            ERROR=4
+        else
+            CREATE_USER=yes
+        fi
+    fi
+
+    if [ "$ERROR" ] ; then
+        box_start ERROR 31 >&2
+        box_row 1 33 "*" "Usage: $0 NEW_USERNAME" >&2
+        if [ "$ERROR" = "2" ] ; then
+            box_row 1 33 "*" "Invalid NEW_USERNAME: $USERNAME" >&2
+        elif [ "$ERROR" = "3" ] ; then
+            box_row 1 33 "*" "User already exists: $USERNAME" >&2
+        elif [ "$ERROR" = "4" ] ; then
+            box_row 1 33 "*" "User does not exist: $USERNAME" >&2
+        fi
+        box_end >&2
+        exit 1
+    fi
+
+    if [ -n "$CREATE_USER" ]; then
+        box_start "LAB USER CREATION"
+        box_row 1 33 "*" "This will create a new user."
+    else
+        box_start "LAB USER RESET"
+        box_row 1 33 "*" "This will reset the following user."
+    fi
+
+    box_row 1 33 "*" "Username: $USERNAME"
+    box_row 1 33 "*" "Home:     /home/$USERNAME"
+    box_row 1 33 "*" "URL:      https://$USERNAME.lab.rjtd.eu"
+    box_end
+
+    read -t 10 -n 1 -p "Proceed (y/N)? " ANSWER
+
+    if [ "$ANSWER" ]; then
+        echo
+    fi
+
+    if [ "$ANSWER" != 'y' ]; then
+        echo "Exiting (did nothing)."
+        exit
+    fi
+
+    echo "Acquiring sudo privileges."
+    sudo -k
+    sudo echo Sudo privileges acquired.
+
+    if [ "$?" != "0" ] ; then
+        echo "Could not acquire sudo privileges."
+        echo "Exiting (did nothing)."
+        exit
+    fi
+
+    if [ -n "$CREATE_USER" -o -n "$FULLRESET" ]; then
+
+        echo "Enter password for new user $USERNAME."
+        read -s -p "New password for $USERNAME: " PASSWORD
+        echo
+        read -s -p "Retype password for $USERNAME: " PASSWORD_CONFIRM
+        echo
+
+        if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+            echo "Passwords do not match."
+            echo "Exiting (did nothing)."
+            exit
+        fi
+
+    fi
+
+    #PASSWORD_ENCRYPTED=$(openssl passwd -crypt "$PASSWORD")
+
+    D=.dotfiles
+
+    OUT_TAR_FILE="$HOME/${USERNAME}_dotfiles_$(date +%F_%H-%M-%S_%3N).tgz"
+    OUT_TAR_FILE2="/home/$USERNAME/${USERNAME}_dotfiles_$(date +%F_%H-%M-%S_%3N).tgz"
+
+    IN_FILES=( $D/setup $D/configs $D/services )
+
+    EXCLUDES=( 
+        --exclude=$D'/configs/*[_@]mac'
+        --exclude=$D'/configs/vim/bundle'
+        --exclude=$D'/configs/vim/swap'
+        --exclude=$D'/configs/vim/vimundo'
+        --exclude=$D'/configs/vim/.netrwhist'
+        --exclude=$D'/services/ngrok'
+    )
+
+    echo
+
+    box_start "LAB USER CREATION (CONTINUATION)"
+    
+    box_row 1 33 "*" "Changing directory"
+
+    cd "$HOME"
+
+    box_row 1 33 "*" "Creating dotfiles tar file"
+    box_end
+
+    tar --create --verbose --gzip \
+        --file "$OUT_TAR_FILE" \
+        "${EXCLUDES[@]}" \
+        "${IN_FILES[@]}"
+
+    printf "\n"
+
+    box_start "LAB USER CREATION (CONTINUATION)"
+
+    box_row 1 33 "*" "Dotfiles tar created: $OUT_TAR_FILE"
+
+    if [ -n "$CREATE_USER" -o -n "$FULLRESET" ]; then
+
+        if [ -n "$CREATE_USER" ]; then
+            box_row 1 33 "*" "Creating new user $USERNAME"
+            sudo useradd --create-home --shell "/bin/bash" "$USERNAME"
+        else
+            box_row 1 33 "*" "Updating password for user $USERNAME"
+        fi
+
+        echo "$USERNAME:$PASSWORD" | sudo chpasswd
+        USER_ID=$(id -u "$USERNAME")
+
+        box_row 1 33 "*" "User $USERNAME created with ID $USER_ID"
+
+    else
+
+        USER_ID=$(id -u "$USERNAME")
+
+    fi
+
+    box_row 1 33 "*" "Moving tar file."
+
+    sudo chown "$USERNAME:$USERNAME" "$OUT_TAR_FILE"
+    sudo mv "$OUT_TAR_FILE" "$OUT_TAR_FILE2"
+
+    box_row 1 33 "*" "Changing directory"
+
+    cd "/home/$USERNAME"
+
+    if [ -n "$RESET" ];then
+
+        box_row 1 33 "*" "Cleaning old .dotfiles"
+
+        sudo rm -rf /home/$USERNAME/.dotfiles
+
+        box_row 1 33 "*" "Cleaning old home/opt"
+
+        if [ -d "/home/$USERNAME/opt" ]; then
+            sudo rm -rf /home/$USERNAME/opt/mambaforge
+            sudo rm -rf /home/$USERNAME/opt/miniforge3
+            sudo rm -rf /home/$USERNAME/opt/miniconda3
+            sudo rmdir --ignore-fail-on-non-empty /home/$USERNAME/opt
+        fi
+
+    fi
+
+    box_row 1 33 "*" "Extracting tar file."
+
+    box_end
+
+    sudo -i -u "$USERNAME" \
+        tar --extract --verbose --gzip \
+        --file "$OUT_TAR_FILE2"
+
+    sudo rm "$OUT_TAR_FILE2"
+
+    echo
+
+    box_start "LAB USER (CONTINUATION)"
+    box_row 1 33 "*" "Changing directory"
+
+    cd .dotfiles
+
+    box_row 1 33 "*" "Setting up user."
+    box_end
+
+    SETUP_CMD="cd .dotfiles; ./setup"
+
+    SUDO_ARGS=""
+    SUDO_ARGS="$SUDO_ARGS -u"
+    SUDO_ARGS="$SUDO_ARGS $USERNAME"
+    SUDO_ARGS="$SUDO_ARGS XDG_RUNTIME_DIR=/run/user/$USER_ID"
+    SUDO_ARGS="$SUDO_ARGS DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$USER_ID/bus"
+    SUDO_ARGS="$SUDO_ARGS -i"
+    SUDO_ARGS="$SUDO_ARGS bash"
+
+    sudo $SUDO_ARGS -c "$SETUP_CMD dotfiles"
+    sudo $SUDO_ARGS -c "touch .hushlogin"
+
+    echo
+
+    box_start "LAB USER (CONTINUATION)"
+
+    APACHE_CONF=/etc/apache2/jupyterlab.conf
+
+    if [ -n "$CREATE_USER" -o -n "$FULLRESET" ]; then
+
+        box_row 1 33 "*" "Setting jupter server password"
+
+        sudo $SUDO_ARGS <<EOF
+        . "/opt/lab/mambaforge/etc/profile.d/conda.sh"
+        . "/opt/lab/mambaforge/etc/profile.d/mamba.sh"
+        mamba activate env-sage
+        python -c 'from jupyter_server.auth.security import set_password; set_password(password="$PASSWORD")'
+EOF
+
+        box_row 1 33 "*" "Configuring Apache proxy"
+
+        sudo bash -c "echo 'Use JLabHost $USERNAME $((USER_ID + 8888))' >> $APACHE_CONF"
+
+    fi
+
+    box_row 1 33 "*" "Cleaning Apache proxy config file"
+
+    sudo bash << EOF
+    (
+        head -n 2 $APACHE_CONF && \
+        tail -n +3 $APACHE_CONF | sort -k 4 -u
+    ) > $APACHE_CONF.tmp
+    mv $APACHE_CONF.tmp $APACHE_CONF
+EOF
+
+    box_row 1 33 "*" "Configuring lab service"
+    box_end
+
+    sudo $SUDO_ARGS -c "$SETUP_CMD lab"
+    sudo $SUDO_ARGS -c "systemctl --user daemon-reload"
+    sudo $SUDO_ARGS -c "systemctl --user restart lab"
+
+    echo
+
+    box_start "LAB USER (CONTINUATION)"
+    box_row 1 33 "*" "Done!"
+    box_row 1 33 "*" "Remember to restart apache."
+    box_end
+}
+
+main "$@"

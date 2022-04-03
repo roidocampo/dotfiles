@@ -94,7 +94,7 @@ call plug#begin('~/.vim/bundle')
     Plug 'coreysharris/Macaulay2.vim',          { 'for': 'Macaulay2' }
     Plug 'aaronj1335/underscore-templates.vim', { 'for': 'mtpl' }
     Plug 'Glench/Vim-Jinja2-Syntax',            { 'for': 'jinja' }
-    Plug 'ssteffl/lark-syntax.vim'
+    "lug 'ssteffl/lark-syntax.vim'
 
     "My blobal plugins
     Plug '~/.vim/myplugins/diff_colors'

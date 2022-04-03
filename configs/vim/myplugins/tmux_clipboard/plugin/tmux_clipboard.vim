@@ -9,7 +9,7 @@ if !executable('tmux')
     finish
 endif
 
-if empty($SSH_CONNECTION)
+if empty($SSH_CONNECTION) && has('clipboard')
     set clipboard=unnamedplus
     let s:on_ssh = 0
 else

@@ -12,6 +12,9 @@ if [ -z "$CONDA_SETUP_DONE" \
      -a -f "$CONDA_BASE/etc/profile.d/conda.sh" \
 ]; then
     . "$CONDA_BASE/etc/profile.d/conda.sh"
+    if [ -f "$CONDA_BASE/etc/profile.d/mamba.sh" ]; then
+        . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    fi
     CONDA_SETUP_DONE=yes
 fi
 
@@ -35,12 +38,33 @@ PROMPT_COMMAND="history -a"
 #     green -> 32
 #     blue  -> 34
 
-default_prompt='(>_<)'
 prompt_color=31
 
-export PS1='\[\033[00;${prompt_color}m\]${prompt}\[\033[00m\] '
+if [ "X$USER" = "Xroi" ]; then
+    cute_prompt='(>_<)'
+    USE_CUTE_PROMPT=yes
+elif [ "X$USER" = "Xjing" ]; then
+    cute_prompt='(=^.^=)'
+    USE_CUTE_PROMPT=yes
+else
+    cute_prompt='(-_-)'
+fi
 
-PREVIOUS_CONDA_ENV=${INITIAL_CONDA_ENV_ENV}
+if [ -n "${JUPYTER_SERVER_ROOT}" ]; then
+    USE_CUTE_PROMPT=
+fi
+
+if [ -z "${TMUX}" ]; then
+    USE_CUTE_PROMPT=
+fi
+
+if [ -z "${USE_CUTE_PROMPT}" ]; then
+    export PS1='\[\033[00;${prompt_color}m\][ \u@\h${prompt} \w ]\$\[\033[00m\] '
+else
+    export PS1='\[\033[00;${prompt_color}m\]${prompt}\[\033[00m\] '
+fi
+
+PREVIOUS_CONDA_ENV=${INITIAL_CONDA_ENV}
 
 function cleanup_tmux_pid_files {
     (
@@ -63,21 +87,33 @@ function set_conda_prompt {
         if [ "${PREVIOUS_CONDA_ENV}" != "${CONDA_DEFAULT_ENV}" ]; then
             PREVIOUS_CONDA_ENV=${CONDA_DEFAULT_ENV}
             cleanup_tmux_pid_files
-            if hash tmux 2>/dev/null; then
+            if hash tmux 2>/dev/null && [ "$TMUX" ]; then
                 tmux rename-window bash
             fi
         fi
-        prompt=${default_prompt}
+        if [ -z "${USE_CUTE_PROMPT}" ]; then
+            prompt=""
+        else
+            prompt=${cute_prompt}
+        fi
     else
         if [ "${PREVIOUS_CONDA_ENV}" != "${CONDA_DEFAULT_ENV}" ]; then
             PREVIOUS_CONDA_ENV=${CONDA_DEFAULT_ENV}
             cleanup_tmux_pid_files
             env > ~/.tmux_env_pid/"$$"
-            if hash tmux 2>/dev/null; then
+            if hash tmux 2>/dev/null && [ "$TMUX" ]; then
                 tmux rename-window "${CONDA_DEFAULT_ENV##env-?(dev-)}"
             fi
         fi
-        prompt="(${CONDA_DEFAULT_ENV})"
+        if [ -z "${USE_CUTE_PROMPT}" ]; then
+            if [ -n "${JUPYTER_SERVER_ROOT}" -a "X${CONDA_DEFAULT_ENV}" = "Xenv-sage" ]; then
+                prompt=""
+            else
+                prompt=" ${CONDA_DEFAULT_ENV}"
+            fi
+        else
+            prompt="(${CONDA_DEFAULT_ENV})"
+        fi
     fi
 }
 PROMPT_COMMAND=$PROMPT_COMMAND'; set_conda_prompt'

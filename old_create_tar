@@ -1,0 +1,104 @@
+#!/bin/bash
+
+########################################################################
+# box drawing
+########################################################################
+
+box_start() {
+    TITLE=$1 
+    if [ -n "$2" ]; then
+        BOX_COLOR=$2
+    else
+        BOX_COLOR=34
+    fi
+    if [ -z "$NOT_FIRST_BOX" ]; then
+        printf '\n'
+        NOT_FIRST_BOX=true
+    fi
+    printf '  \033[00;%sm┌─── %s ' "$BOX_COLOR" "$TITLE"
+    i=0
+    padlen=$(( 74 - ${#TITLE} ))
+    while [ "$i" -lt "$padlen" ]; do
+        printf '─'
+        i=$(( i+1 ))
+    done
+    printf '┐\033[00m\n'
+    printf '  \033[00;%sm│%-79.79s│\033[00m\n' "$BOX_COLOR" ''
+}
+
+box_row() {
+    CWIDTH1=$1
+    COLOR=$2
+    COL1=$3
+    COL2=$4
+    CWIDTH2=$(( 75 - CWIDTH1 ))
+    printf '  \033[00;%sm│\033[00m  ' "$BOX_COLOR"
+    printf '\033[00;%sm' "$COLOR"
+    printf '%-*.*s' "$CWIDTH1" "$CWIDTH1" "$COL1"
+    printf '\033[00m '
+    printf '%-*.*s' "$CWIDTH2" "$CWIDTH2" "$COL2"
+    printf ' \033[00;%sm│\033[00m\n' "$BOX_COLOR"
+}
+
+box_end() {
+    printf '  \033[00;%sm│%-79.79s│\033[00m\n' "$BOX_COLOR" ''
+    printf '  \033[00;%sm└' "$BOX_COLOR"
+    i=0
+    while [ "$i" -lt 79 ]; do
+        printf '─'
+        i=$(( i+1 ))
+    done
+    printf '┘\033[00m\n\n'
+}
+
+########################################################################
+# create_tar
+########################################################################
+
+create_tar() {
+
+    D=.dotfiles
+
+    OUT_TAR_FILE="$HOME/dotfiles_$(date +%F_%H-%M-%S_%3N).tgz"
+
+    IN_FILES=( $D/setup $D/configs $D/services )
+
+    EXCLUDES=( 
+        --exclude=$D'/configs/*[_@]mac'
+        --exclude=$D'/configs/vim/bundle'
+        --exclude=$D'/configs/vim/swap'
+        --exclude=$D'/configs/vim/vimundo'
+        --exclude=$D'/configs/vim/.netrwhist'
+        --exclude=$D'/services/ngrok'
+    )
+
+    box_start "CREATING TAR"
+
+    box_row 1 33 "*" "Changing directory"
+
+    cd "$HOME"
+
+    box_row 1 33 "*" "Creating tar file"
+    box_end
+
+    tar --create --verbose --gzip \
+        --file "$OUT_TAR_FILE" \
+        "${EXCLUDES[@]}" \
+        "${IN_FILES[@]}"
+
+    printf "\n"
+
+    box_start "CREATING TAR (CONTINUATION)"
+
+    box_row 1 33 "*" "Done!"
+
+    box_row 1 33 "*" "Tar created: $OUT_TAR_FILE"
+
+    box_end
+}
+
+########################################################################
+# main
+########################################################################
+
+create_tar

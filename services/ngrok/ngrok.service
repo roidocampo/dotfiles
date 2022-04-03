@@ -1,0 +1,14 @@
+[Unit]
+Description=ngrok
+
+[Service]
+ExecStart=%h/.dotfiles/services/ngrok/ngrok start --all --config %h/.dotfiles/services/ngrok/ngrok.yml
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+IgnoreSIGPIPE=true
+Restart=always
+RestartSec=3
+Type=simple
+
+[Install]
+WantedBy=default.target
