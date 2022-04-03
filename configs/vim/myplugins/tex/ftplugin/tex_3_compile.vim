@@ -35,7 +35,7 @@ if filereadable('makefile') || filereadable('Makefile')
   if ! v:shell_error
     let &makeprg='make "VIMSERVER='.v:servername.'" "VIMFILE='.expand('%p').'" fromvim'
   endif
-  let s:output = system('make fromvim-conf')
+  let s:output = system('make "VIMFILE='.expand('%p').'" fromvim-conf')
   if ! v:shell_error
     let b:pdf_file = split(s:output)[0]
   endif

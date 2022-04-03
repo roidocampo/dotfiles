@@ -1,0 +1,24 @@
+package:
+  name: evince
+  version: 3.40.1
+
+source:
+  fn: evince-40.1.tar.xz
+  url: https://download.gnome.org/sources/evince/40/evince-40.1.tar.xz
+  sha256: 7a666363c350af2e3bbba7f14b3c1befc5012f9ed3d9d073447f4c59f33dcf2d
+
+requirements:
+  build:
+    - meson
+    - ninja
+    - gtk4
+    - poppler
+    - adwaita-icon-theme
+  run:
+    - gtk4
+    - poppler
+    - adwaita-icon-theme
+
+about:
+  home: https://wiki.gnome.org/Apps/Evince
+  license: GPLv2

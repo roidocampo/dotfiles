@@ -25,6 +25,7 @@ set title                         "Show information about vi the terminal's titl
 set incsearch                     "Use incremental search
 set hlsearch                      "Hilight search results
 set mouse=a                       "Enable mouse ('a' stands for all)
+set ttymouse=xterm2               "Enalbe resizing splits with mouse
 set mousemodel=popup              "Right click gives a menu
 set nowrap                        "Do no wrap lines
 set nojoinspaces                  "Join command should not add 2 spaces after .
@@ -39,7 +40,9 @@ set sidescrolloff=5               "Show 5 colomuns left/right of cursor
 "et number                        "Show line numbers
 "et signcolumn=number             "Show signs in number column
 "et foldcolumn=1                  "Show fold column
-set fillchars=fold:\              "Fill fold lines with spaces
+set fillchars=stl:─,stlnc:─,vert:│,fold:\              "Fill fold lines with spaces
+set statusline=─
+set laststatus=0
 "et undofile                      "Persistent undo
 "et undodir=$HOME/.vim/vimundo    "Directory for persistent undo
 
@@ -154,6 +157,9 @@ hi LineNr ctermbg=NONE
 hi Folded ctermbg=NONE 
 hi SignColumn ctermbg=NONE
 hi FoldColumn ctermbg=NONE ctermfg=NONE
+hi VertSplit ctermbg=NONE ctermfg=18
+hi StatusLine ctermbg=NONE ctermfg=18
+hi StatusLineNC ctermbg=NONE ctermfg=18
 
 hi clear ALEErrorSign
 hi clear ALEWarningSign
