@@ -2,18 +2,25 @@
 #
 ########################################################################
 
-if [ -n "$PS1" -o -n "$_BASH_PROFILE_ECHO" ]; then
+if [ -n "${JUPYTER_SERVER_ROOT}" ]; then
+    ECO=""
+elif [ -n "$PS1" -o -n "$_BASH_PROFILE_ECHO" ]; then
     ECO=yes
 fi
 
+if [ -z "$_IN_TUMUX_LAUNCHER" -a -n "$ECO" ]; then
+    echo "Welcome to $(uname -n)!"
+fi
+
 [ -n "$PS1" ] && export BASH_SILENCE_DEPRECATION_WARNING=1
-[ -n "$ECO" ] && echo '* starting login shell'
+[ -n "$ECO" ] && echo
+[ -n "$ECO" ] && echo ' * Starting login shell'
 
 ########################################################################
 # PATH and local environment setup
 ########################################################################
 
-[ -n "$ECO" ] && echo '* configuring PATH and local environment vars'
+[ -n "$ECO" ] && echo ' * Configuring PATH and environment'
 
 function prepend_to {
     if [ -d "$2" -a "${!1}" != "$2" ]; then
@@ -45,12 +52,26 @@ export EDITOR=vim
 # CONDA initiation
 ########################################################################
 
-[ -n "$ECO" ] && echo '* initiating conda'
+[ -n "$ECO" ] && echo ' * Initiating conda'
 
-export CONDA_BASE=$HOME/opt/miniconda3
+function set_conda_base {
+    if [ -z "$CONDA_BASE" -a -d "$1" ]; then
+        export CONDA_BASE="$1"
+    fi
+}
+
+set_conda_base "/opt/lab/mambaforge"
+set_conda_base "/opt/lab/miniforge3"
+set_conda_base "/opt/lab/miniconda3"
+set_conda_base "$HOME/opt/mambaforge"
+set_conda_base "$HOME/opt/miniforge3"
+set_conda_base "$HOME/opt/miniconda3"
 
 if [ -f "$CONDA_BASE/etc/profile.d/conda.sh" ]; then
     . "$CONDA_BASE/etc/profile.d/conda.sh"
+    if [ -f "$CONDA_BASE/etc/profile.d/mamba.sh" ]; then
+        . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    fi
     CONDA_SETUP_DONE=yes
 fi
 
@@ -63,12 +84,28 @@ if [ -n "$PS1" -a -n "$BASH" -a -f "$HOME/.bashrc" ]; then
 fi
 
 ########################################################################
+# Sage environment activation
+########################################################################
+
+if [ -n "$CONDA_SETUP_DONE" ]; then
+    if [ -z "$_IN_TUMUX_LAUNCHER" -a ! "X$USER" = "Xroi" ]; then
+        [ -n "$ECO" ] && echo ' * Activating sage environment'
+        if ! conda activate env-sage; then
+            echo " * Could not activate environment"
+        fi
+    fi
+fi
+
+########################################################################
 # 
 ########################################################################
+
+[ -n "$ECO" -a ! "$_BASH_PROFILE_ECHO" ] && echo
 
 unset _BASH_PROFILE_ECHO
 unset ECO
 unset -f prepend_to
+unset -f set_conda_base
 
 ########################################################################
 # 

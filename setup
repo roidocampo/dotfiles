@@ -1,6 +1,12 @@
 #!/bin/bash
 
 ########################################################################
+# exit on error
+########################################################################
+
+set -e
+
+########################################################################
 # conda package lists
 ########################################################################
 
@@ -31,7 +37,7 @@ CONDA_PACKAGES=(
     python
     requests
     tar
-    tmux
+    'tmux=3.1'
     tree
     vim
     wget
@@ -84,7 +90,18 @@ DEV_PIPS=(
 # conda base
 ########################################################################
 
-CONDA_BASE=$HOME/opt/miniconda3
+function set_conda_base {
+    if [ -z "$CONDA_BASE" -o -d "$1" ]; then
+        CONDA_BASE="$1"
+    fi
+}
+
+set_conda_base "$HOME/opt/miniconda3"
+set_conda_base "$HOME/opt/miniforge3"
+set_conda_base "$HOME/opt/mambaforge"
+set_conda_base "/opt/lab/miniconda3"
+set_conda_base "/opt/lab/miniforge3"
+set_conda_base "/opt/lab/mambaforge"
 
 ########################################################################
 # show_help
@@ -96,31 +113,33 @@ show_help() {
     DOTFILES_DIR_NAME=$(dirname "$(true_path "$0")")
 
     box_start "DOTFILES"
-    box_row 16 35 \
-        "./setup dotfiles" "  ::  setup configuration files in \$HOME"
-    box_row 16 35 \
-        "./setup conda"    "  ::  download and install miniconda3"
-    box_row 16 35 \
-        "./setup jupyter"  "  ::  setup jupyter environment in conda"
-    box_row 16 35 \
-        "./setup sage"     "  ::  setup sage environment in conda"
+    box_row 18 35 \
+        "./setup dotfiles"    "  ::  setup configuration files in \$HOME"
+    box_row 18 35 \
+        "./setup conda"       "  ::  download and install conda"
+    box_row 18 35 \
+        "./setup multiconda"  "  ::  download and install mulituser conda"
+    box_row 18 35 \
+        "./setup jupyter"     "  ::  setup jupyter environment in conda"
+    box_row 18 35 \
+        "./setup sage"        "  ::  setup sage environment in conda"
     [ "X$UNAME_KERNEL" = "XDarwin" ] && \
-    box_row 16 35 \
-        "./setup dev"      "  ::  setup dev environment in conda"
+    box_row 18 35 \
+        "./setup dev"         "  ::  setup dev environment in conda"
     [ "X$UNAME_KERNEL" = "XDarwin" ] && \
-    box_row 16 35 \
-        "./setup killdev"  "  ::  remove dev environment in conda"
+    box_row 18 35 \
+        "./setup killdev"     "  ::  remove dev environment in conda"
     [ "X$UNAME_KERNEL" = "XDarwin" ] && \
-    box_row 16 35 \
-        "./setup djvu"     "  ::  build djvulibre library"
+    box_row 18 35 \
+        "./setup djvu"        "  ::  build djvulibre library"
     [ -d "$DOTFILES_DIR_NAME/services/ngrok" ] && \
-    box_row 16 35 \
-        "./setup ngrok"    "  ::  setup ngrok service"
+    box_row 18 35 \
+        "./setup ngrok"       "  ::  setup ngrok service"
     [ -d "$DOTFILES_DIR_NAME/services/lab" ] && \
-    box_row 16 35 \
-        "./setup lab"      "  ::  setup jupyter lab service"
-    box_row 16 35 \
-        "./setup help"     "  ::  print this help"
+    box_row 18 35 \
+        "./setup lab"         "  ::  setup jupyter lab service"
+    box_row 18 35 \
+        "./setup help"        "  ::  print this help"
     box_end
 
 }
@@ -298,6 +317,10 @@ backup_away() {
 
 setup_conda() {
 
+    if [ "X$1" = "Xmultiuser" ]; then
+        MULTIUSER_INSTALL=true
+    fi
+
     box_start "CONDA SETUP"
 
     if [ -e "$CONDA_BASE" ]; then
@@ -310,16 +333,65 @@ setup_conda() {
 
     UNAME_KERNEL=$(uname)
     UNAME_MACHINE=$(uname -m)
-    if [ "X$UNAME_KERNEL" = "XDarwin" ]; then
+    if [ "X$UNAME_KERNEL" = "XDarwin" ] && [ "X$UNAME_MACHINE" = "Xx86_64" ]; then
+        REPO=https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-MacOSX-x86_64.sh
+        CONDA_VARIANT=mambaforge
+    elif [ "X$UNAME_KERNEL" = "XDarwin" ] && [ "X$UNAME_MACHINE" = "Xarm64" ]; then
+        REPO=https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-MacOSX-arm64.sh
+        CONDA_VARIANT=mambaforge
+    elif [ "X$UNAME_KERNEL" = "XDarwin" ]; then
         REPO=https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+        CONDA_VARIANT=miniconda3
+    elif [ "X$UNAME_KERNEL" = "XLinux" ] && [ "X$UNAME_MACHINE" = "Xx86_64" ]; then
+        REPO=https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-x86_64.sh
+        CONDA_VARIANT=mambaforge
     elif [ "X$UNAME_KERNEL" = "XLinux" ] && [ "X$UNAME_MACHINE" = "Xx86_64" ]; then
         REPO=https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        CONDA_VARIANT=miniconda3
     elif [ "X$UNAME_KERNEL" = "XLinux" ] && [ "X$UNAME_MACHINE" = "Xx86_64" ]; then
         REPO=https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86.sh
+        CONDA_VARIANT=miniconda3
     else
         box_row 7 31 "* Error" "Platform not supported"
         box_end
         return
+    fi
+
+    if [ "$MULTIUSER_INSTALL" ]; then
+
+        box_row 1 33 "*" "Acquiring sudo privileges."
+        box_end
+
+        echo "Acquiring sudo privileges."
+        sudo -k
+        sudo echo Sudo privileges acquired.
+
+        box_start "CONTINUING CONDA SETUP"
+
+        CALLING_USER=$USER
+        CONDA_GROUP=labusers
+
+        if [ -z "$(getent group "$CONDA_GROUP")" ]; then
+            box_row 1 33 "*" "Creating labusers group"
+            sudo groupadd "$CONDA_GROUP"
+            sudo usermod -a -G "$CONDA_GROUP" "$CALLING_USER"
+        fi
+
+        CONDA_BASE_PARENT=/opt/lab
+        CONDA_BASE=$CONDA_BASE_PARENT/$CONDA_VARIANT
+
+        if [ ! -e "$CONDA_BASE_PARENT" ]; then
+            box_row 1 33 "*" "Creating conda base directory"
+            sudo mkdir "$CONDA_BASE_PARENT"
+            sudo chown "$CALLING_USER":"$CONDA_GROUP" "$CONDA_BASE_PARENT"
+            sudo chmod g+s "$CONDA_BASE_PARENT"
+        fi
+
+    else
+
+        CONDA_BASE_PARENT=$HOME/opt
+        CONDA_BASE=$CONDA_BASE_PARENT/$CONDA_VARIANT
+
     fi
 
     box_row 1 33 "*" "Creating temporary directory"
@@ -336,7 +408,7 @@ setup_conda() {
     box_row 1 33 "*" "Downloading: $(basename "$REPO")"
     box_end
 
-    curl -o miniconda_installer.sh "$REPO"
+    curl -L -o conda_installer.sh "$REPO"
 
     printf '\n'
 
@@ -344,7 +416,7 @@ setup_conda() {
     box_row 1 33 "*" "Installing miniconda"
     box_end
 
-    bash ./miniconda_installer.sh -b -p "$CONDA_BASE"
+    bash ./conda_installer.sh -b -p "$CONDA_BASE"
 
     printf '\n'
 
@@ -353,17 +425,18 @@ setup_conda() {
 
     # shellcheck disable=SC1090
     . "$CONDA_BASE/etc/profile.d/conda.sh"
-    conda activate base
+    . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    mamba activate base
 
-    box_row 1 33 "*" "Configuring conda-forge"
+    # box_row 1 33 "*" "Configuring conda-forge"
 
-    conda config --add channels conda-forge 2>/dev/null
-    conda config --set channel_priority strict 2>/dev/null
+    # mamba config --add channels conda-forge 2>/dev/null
+    # mamba config --set channel_priority strict 2>/dev/null
 
     box_row 1 33 "*" "Configuring base environment"
     box_end
 
-    conda install --name base conda-build mamba
+    mamba install --name base conda-build #mamba
 
     printf '\n'
 
@@ -390,7 +463,7 @@ setup_conda() {
 ########################################################################
 
 conda_exists() {
-    conda >/dev/null 2>&1
+    mamba >/dev/null 2>&1
 }
 
 ########################################################################
@@ -457,7 +530,8 @@ setup_conda_env() {
 
     # shellcheck disable=SC1090
     . "$CONDA_BASE/etc/profile.d/conda.sh"
-    conda activate base
+    . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    mamba activate base
 
     box_row 1 33 "*" "Creating and activating conda environment \`$ENV_NAME\`"
     box_end
@@ -467,10 +541,10 @@ setup_conda_env() {
 
     if [ "$ENV_LOCAL_PACKAGES" ]; then
 
-        conda activate "$ENV_NAME"
+        mamba activate "$ENV_NAME"
 
         box_start "CONTINUING $BOX_TITLE SETUP"
-        box_row 1 33 "*" "Installing extra packages via pip"
+        box_row 1 33 "*" "Installing extra local packages"
         box_end
 
         mamba install --name "$ENV_NAME" --channel local $ENV_LOCAL_PACKAGES
@@ -479,7 +553,7 @@ setup_conda_env() {
 
     if [ "$ENV_PIPS" ]; then
 
-        conda activate "$ENV_NAME"
+        mamba activate "$ENV_NAME"
 
         box_start "CONTINUING $BOX_TITLE SETUP"
         box_row 1 33 "*" "Installing extra packages via pip"
@@ -558,12 +632,13 @@ remove_dev() {
 
     # shellcheck disable=SC1090
     . "$CONDA_BASE/etc/profile.d/conda.sh"
-    conda activate base
+    . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    mamba activate base
 
     box_row 1 33 "*" "Removing conda environment \`env-dev\`"
     box_end
 
-    conda remove --name "env-dev" --all
+    mamba remove --name "env-dev" --all
 
     printf '\n'
 
@@ -590,7 +665,8 @@ build_djvu() {
 
     # shellcheck disable=SC1090
     . "$CONDA_BASE/etc/profile.d/conda.sh"
-    conda activate base
+    . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    mamba activate base
 
     box_row 1 33 "*" "Changing diretory"
 
@@ -602,7 +678,7 @@ build_djvu() {
     box_row 1 33 "*" "Building package"
     box_end
 
-    conda build djvulibre
+    mamba build djvulibre
 
     printf '\n'
 
@@ -612,7 +688,7 @@ build_djvu() {
 }
 
 ########################################################################
-# setup_ngrok
+# setup_service
 ########################################################################
 
 setup_service() {
@@ -631,6 +707,7 @@ setup_service() {
 
     if [ ! -e "/var/lib/systemd/linger/$USER" ]; then
         loginctl enable-linger "$USER"
+        sleep 3
     fi
 
     if [ ! -e "/var/lib/systemd/linger/$USER" ]; then
@@ -730,6 +807,7 @@ main() {
             help|'') show_help; exit ;;
             dotfiles) setup_dotfiles; exit ;;
             conda) setup_conda; exit ;;
+            multiconda) setup_conda multiuser; exit ;;
             jupyter) setup_jupyter; exit ;;
             sage) setup_sage; exit ;;
             dev) setup_dev; exit ;;

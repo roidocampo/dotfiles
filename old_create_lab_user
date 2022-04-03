@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 ########################################################################
 # box drawing
 ########################################################################
@@ -58,16 +56,6 @@ box_end() {
 ########################################################################
 
 main() {
-
-    if [ "X$1" = "X--reset" ]; then
-        RESET="reset"
-        shift
-    elif [ "X$1" = "X--full-reset" ]; then
-        RESET="reset"
-        FULLRESET="yes"
-        shift
-    fi
-
     if [ "$#" != "1" ] ; then
         ERROR="1"
         USERNAME="okname"
@@ -77,13 +65,7 @@ main() {
         if ! [[ "$USERNAME" =~ ^[a-z][a-z0-9]+$ ]] ; then
             ERROR="2"
         elif id "$USERNAME" &>/dev/null; then
-            if [ -z "$RESET" ]; then
-                ERROR="3"
-            fi
-        elif [ -n "$RESET" ]; then
-            ERROR=4
-        else
-            CREATE_USER=yes
+            ERROR="3"
         fi
     fi
 
@@ -94,21 +76,13 @@ main() {
             box_row 1 33 "*" "Invalid NEW_USERNAME: $USERNAME" >&2
         elif [ "$ERROR" = "3" ] ; then
             box_row 1 33 "*" "User already exists: $USERNAME" >&2
-        elif [ "$ERROR" = "4" ] ; then
-            box_row 1 33 "*" "User does not exist: $USERNAME" >&2
         fi
         box_end >&2
         exit 1
     fi
 
-    if [ -n "$CREATE_USER" ]; then
-        box_start "LAB USER CREATION"
-        box_row 1 33 "*" "This will create a new user."
-    else
-        box_start "LAB USER RESET"
-        box_row 1 33 "*" "This will reset the following user."
-    fi
-
+    box_start "LAB USER CREATION"
+    box_row 1 33 "*" "This will create a new user."
     box_row 1 33 "*" "Username: $USERNAME"
     box_row 1 33 "*" "Home:     /home/$USERNAME"
     box_row 1 33 "*" "URL:      https://$USERNAME.lab.rjtd.eu"
@@ -135,20 +109,16 @@ main() {
         exit
     fi
 
-    if [ -n "$CREATE_USER" -o -n "$FULLRESET" ]; then
+    echo "Enter password for new user $USERNAME."
+    read -s -p "New password for $USERNAME: " PASSWORD
+    echo
+    read -s -p "Retype password for $USERNAME: " PASSWORD_CONFIRM
+    echo
 
-        echo "Enter password for new user $USERNAME."
-        read -s -p "New password for $USERNAME: " PASSWORD
-        echo
-        read -s -p "Retype password for $USERNAME: " PASSWORD_CONFIRM
-        echo
-
-        if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
-            echo "Passwords do not match."
-            echo "Exiting (did nothing)."
-            exit
-        fi
-
+    if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
+        echo "Passwords do not match."
+        echo "Exiting (did nothing)."
+        exit
     fi
 
     #PASSWORD_ENCRYPTED=$(openssl passwd -crypt "$PASSWORD")
@@ -191,26 +161,14 @@ main() {
 
     box_row 1 33 "*" "Dotfiles tar created: $OUT_TAR_FILE"
 
-    if [ -n "$CREATE_USER" -o -n "$FULLRESET" ]; then
+    box_row 1 33 "*" "Creating new user $USERNAME"
 
-        if [ -n "$CREATE_USER" ]; then
-            box_row 1 33 "*" "Creating new user $USERNAME"
-            sudo useradd --create-home --shell "/bin/bash" "$USERNAME"
-        else
-            box_row 1 33 "*" "Updating password for user $USERNAME"
-        fi
+    ##sudo useradd -m -p "$PASSWORD_ENCRYPTED" "$USERNAME"
+    sudo useradd -m  "$USERNAME"
+    echo "$USERNAME:$PASSWORD" | sudo chpasswd
+    USER_ID=$(id -u "$USERNAME")
 
-        echo "$USERNAME:$PASSWORD" | sudo chpasswd
-        USER_ID=$(id -u "$USERNAME")
-
-        box_row 1 33 "*" "User $USERNAME created with ID $USER_ID"
-
-    else
-
-        USER_ID=$(id -u "$USERNAME")
-
-    fi
-
+    box_row 1 33 "*" "User $USERNAME created with ID $USER_ID"
     box_row 1 33 "*" "Moving tar file."
 
     sudo chown "$USERNAME:$USERNAME" "$OUT_TAR_FILE"
@@ -219,23 +177,6 @@ main() {
     box_row 1 33 "*" "Changing directory"
 
     cd "/home/$USERNAME"
-
-    if [ -n "$RESET" ];then
-
-        box_row 1 33 "*" "Cleaning old .dotfiles"
-
-        sudo rm -rf /home/$USERNAME/.dotfiles
-
-        box_row 1 33 "*" "Cleaning old home/opt"
-
-        if [ -d "/home/$USERNAME/opt" ]; then
-            sudo rm -rf /home/$USERNAME/opt/mambaforge
-            sudo rm -rf /home/$USERNAME/opt/miniforge3
-            sudo rm -rf /home/$USERNAME/opt/miniconda3
-            sudo rmdir --ignore-fail-on-non-empty /home/$USERNAME/opt
-        fi
-
-    fi
 
     box_row 1 33 "*" "Extracting tar file."
 
@@ -249,7 +190,7 @@ main() {
 
     echo
 
-    box_start "LAB USER (CONTINUATION)"
+    box_start "LAB USER CREATION (CONTINUATION)"
     box_row 1 33 "*" "Changing directory"
 
     cd .dotfiles
@@ -259,60 +200,44 @@ main() {
 
     SETUP_CMD="cd .dotfiles; ./setup"
 
-    SUDO_ARGS=""
-    SUDO_ARGS="$SUDO_ARGS -u"
-    SUDO_ARGS="$SUDO_ARGS $USERNAME"
-    SUDO_ARGS="$SUDO_ARGS XDG_RUNTIME_DIR=/run/user/$USER_ID"
-    SUDO_ARGS="$SUDO_ARGS DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$USER_ID/bus"
-    SUDO_ARGS="$SUDO_ARGS -i"
-    SUDO_ARGS="$SUDO_ARGS bash"
+    sudo -i -u "$USERNAME" bash -c "$SETUP_CMD dotfiles"
+    sudo -i -u "$USERNAME" bash -c "$SETUP_CMD conda"
 
-    sudo $SUDO_ARGS -c "$SETUP_CMD dotfiles"
-    sudo $SUDO_ARGS -c "touch .hushlogin"
+    SETUP_CMD=". /home/$USERNAME/opt/miniconda3/etc/profile.d/mamba.sh; $SETUP_CMD"
+    SETUP_CMD=". /home/$USERNAME/opt/miniconda3/etc/profile.d/conda.sh; $SETUP_CMD"
+
+    sudo -i -u "$USERNAME" bash -c "$SETUP_CMD jupyter"
+    sudo -i -u "$USERNAME" bash -c "$SETUP_CMD sage"
 
     echo
 
-    box_start "LAB USER (CONTINUATION)"
+    box_start "LAB USER CREATION (CONTINUATION)"
+    box_row 1 33 "*" "Setting jupter server password"
 
-    APACHE_CONF=/etc/apache2/jupyterlab.conf
-
-    if [ -n "$CREATE_USER" -o -n "$FULLRESET" ]; then
-
-        box_row 1 33 "*" "Setting jupter server password"
-
-        sudo $SUDO_ARGS <<EOF
-        . "/opt/lab/mambaforge/etc/profile.d/conda.sh"
-        . "/opt/lab/mambaforge/etc/profile.d/mamba.sh"
-        mamba activate env-sage
-        python -c 'from jupyter_server.auth.security import set_password; set_password(password="$PASSWORD")'
+    sudo -i -u "$USERNAME" bash <<EOF
+    . "/home/$USERNAME/opt/miniconda3/etc/profile.d/conda.sh"
+    . "/home/$USERNAME/opt/miniconda3/etc/profile.d/mamba.sh"
+    mamba activate env-sage
+    python -c 'from jupyter_server.auth.security import set_password; set_password(password="$PASSWORD")'
 EOF
 
-        box_row 1 33 "*" "Configuring Apache proxy"
-
-        sudo bash -c "echo 'Use JLabHost $USERNAME $((USER_ID + 8888))' >> $APACHE_CONF"
-
-    fi
-
-    box_row 1 33 "*" "Cleaning Apache proxy config file"
-
-    sudo bash << EOF
-    (
-        head -n 2 $APACHE_CONF && \
-        tail -n +3 $APACHE_CONF | sort -k 4 -u
-    ) > $APACHE_CONF.tmp
-    mv $APACHE_CONF.tmp $APACHE_CONF
-EOF
-
-    box_row 1 33 "*" "Configuring lab service"
     box_end
-
-    sudo $SUDO_ARGS -c "$SETUP_CMD lab"
-    sudo $SUDO_ARGS -c "systemctl --user daemon-reload"
-    sudo $SUDO_ARGS -c "systemctl --user restart lab"
-
+    
+    sudo -i -u "$USERNAME" bash <<EOF
+    . "/home/$USERNAME/opt/miniconda3/etc/profile.d/conda.sh"
+    . "/home/$USERNAME/opt/miniconda3/etc/profile.d/mamba.sh"
+    export XDG_RUNTIME_DIR="/run/user/$USER_ID"
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
+    cd .dotfiles
+    ./setup lab
+EOF
     echo
 
-    box_start "LAB USER (CONTINUATION)"
+    box_start "LAB USER CREATION (CONTINUATION)"
+    box_row 1 33 "*" "Configuring Apache proxy"
+
+    sudo bash -c "echo 'Use JLabHost $USERNAME $((USER_ID + 8888))' >> /etc/apache2/jupyterlab.conf"
+
     box_row 1 33 "*" "Done!"
     box_row 1 33 "*" "Remember to restart apache."
     box_end

@@ -218,7 +218,25 @@ fi
 # man
 ###########################################################################
 
-if [ -f "$HOME/.vim/bundle/vimpager/vimpager" ]; then
+if [ -x "$(command -v less)" ]; then
+
+    function _man_less() {
+        LESS_TERMCAP_mb=$'\E[36m'     \
+        LESS_TERMCAP_md=$'\E[36m'     \
+        LESS_TERMCAP_me=$'\E[0m'        \
+        LESS_TERMCAP_so=$'\E[48;5;8m' \
+        LESS_TERMCAP_se=$'\E[0m'        \
+        LESS_TERMCAP_us=$'\E[36m'     \
+        LESS_TERMCAP_ue=$'\E[0m'        \
+        MANPATH="$CONDA_PREFIX/share/man:" \
+        LESS="--mouse --wheel-lines 3" \
+        PAGER="less -R" \
+        \man "$@"
+    }
+
+    alias man='_man_less'
+
+elif [ -f "$HOME/.vim/bundle/vimpager/vimpager" ]; then
 
     function _man_vimpager() {(
         if [ -z "$*" ]; then
@@ -246,7 +264,9 @@ fi
 # which
 ###########################################################################
 
-alias which='alias | \which --tty-only --read-alias --show-dot --show-tilde'
+if (\which --tty-only cat >/dev/null 2>&1); then
+    alias which='alias | \which --tty-only --read-alias --show-dot --show-tilde'
+fi
 
 ###########################################################################
 # print path in a sane way
@@ -427,6 +447,16 @@ alias activate='cenv'
 alias deact='cenv deactivate'
 alias deactivate='cenv deactivate'
 
+########################################################################
+# 
+########################################################################
+
+function penv() {
+    env "$@" \
+        | sort \
+        | column -t -s= \
+        | cut -c -$COLUMNS
+}
 
 ########################################################################
 # 

@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 
-CONDA_BASE=$HOME/opt/miniconda3
+function set_conda_base {
+    if [ -z "$CONDA_BASE" -a -d "$1" ]; then
+        export CONDA_BASE="$1"
+    fi
+}
+
+set_conda_base "/opt/lab/mambaforge"
+set_conda_base "/opt/lab/miniforge3"
+set_conda_base "/opt/lab/miniconda3"
+set_conda_base "$HOME/opt/mambaforge"
+set_conda_base "$HOME/opt/miniforge3"
+set_conda_base "$HOME/opt/miniconda3"
+
+unset -f set_conda_base
+
 BASE_DIR="$HOME/Jupyter"
 
 mkdir -p "$BASE_DIR"
@@ -8,8 +22,12 @@ mkdir -p "$BASE_DIR"
 cd "$BASE_DIR"
 
 . "$CONDA_BASE/etc/profile.d/conda.sh"
-
-conda activate env-sage
+if [ -f "$CONDA_BASE/etc/profile.d/mamba.sh" ]; then
+    . "$CONDA_BASE/etc/profile.d/mamba.sh"
+    mamba activate env-sage
+else
+    conda activate env-sage
+fi
 
 exec jupyter lab \
     --ServerApp.allow_remote_access=True \
