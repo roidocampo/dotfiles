@@ -14,7 +14,7 @@ class TeXCompiler(object):
     def main(cls):
         if sys.argv[1] == "-f":
             file = sys.argv[2]
-            compiler = cls(file, silent=True)
+            compiler = cls(file, silent=True, cmdline_args=sys.argv[3:])
             compiler.parse_config()
             print(compiler.file_path)
             target_file = os.path.join(
@@ -23,21 +23,22 @@ class TeXCompiler(object):
             print(target_file)
         elif sys.argv[1] == "-l":
             log_file = sys.argv[2]
-            compiler = cls(log_file, silent=True)
+            compiler = cls(log_file, silent=True, cmdline_args=sys.argv[3:])
             has_errors = compiler.print_errors(log_file)
             if has_errors:
                 sys.exit(1)
         else:
             file = sys.argv[1]
-            compiler = cls(file)
+            compiler = cls(file, silent=False, cmdline_args=sys.argv[2:])
             has_errors = compiler.run()
             if has_errors:
                 sys.exit(1)
 
-    def __init__(self, file, silent=False):
+    def __init__(self, file, silent=False, cmdline_args=[]):
         self.file = file
         self.silent = silent
         self.verbose = False
+        self.cmdline_args = cmdline_args
 
     def set_defaults(self):
         ext = os.path.splitext(self.file)[1]
@@ -75,6 +76,9 @@ class TeXCompiler(object):
             for line in tex_file:
                 if not self.parse_config_line(line):
                     break
+        for arg in self.cmdline_args:
+            line = "%texcompile:" + arg
+            self.parse_config_line(line)
 
     config_line_re = re.compile(r"^\s*%+\s*texcompile\s*:\s*(\S+)\s*(.*)",re.I)
 
