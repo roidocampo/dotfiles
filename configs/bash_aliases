@@ -345,7 +345,7 @@ function cenv() {
 		  - python
 		  - requests
 		  - tar
-		  - tmux
+		  - tmux=3.1
 		  - tree
 		  - vim
 		  - wget
@@ -373,6 +373,22 @@ function cenv() {
                 elif [ "$ENV_NAME" ]; then
                     echo "Creating environment \`$ENV_NAME\`."
                     mamba env create --file "environment.yml"
+                else
+                    echo 'Could not determine environment from `environment.yml`.'
+                fi
+            else
+                echo 'Could not find file `environment.yml`.'
+            fi
+            ;;
+
+        update|-update)
+            if [ -f "environment.yml" ]; then
+                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+                if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
+                    echo "Please change name in environment.yml"
+                elif [ "$ENV_NAME" ]; then
+                    echo "Creating environment \`$ENV_NAME\`."
+                    mamba env update --file "environment.yml" --prune
                 else
                     echo 'Could not determine environment from `environment.yml`.'
                 fi
@@ -409,6 +425,7 @@ function cenv() {
 		    cenv deactivate   (deactivate current environment)
 		    cenv init         (create template ./environment.yml)
 		    cenv create       (create environment using ./environment.yml)
+		    cenv update       (update environment using ./environment.yml)
 		    cenv remove       (remove environment using ./environment.yml)
 		    cenv usage        (show this help)
 		
