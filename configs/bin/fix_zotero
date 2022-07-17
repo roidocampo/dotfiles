@@ -1,0 +1,165 @@
+#!/usr/bin/env python
+
+import math
+import pickle
+import sys
+
+from pathlib import Path
+from pprint import pprint
+# from unicodedata import normalize as uninormalize
+
+from pyzotero import zotero
+from unidecode import unidecode
+
+library_id = "136718"
+library_type = "user"
+api_key = "ViQnzNc3euMTH9SsxSGE6tc5"
+pickle_file = Path.home() / ".zotero_fixer_db.pickle"
+lib_dir = Path.home() / 'Dropbox' / "Family Room" / "Roi's Library"
+
+zot = zotero.Zotero(library_id, library_type, api_key)
+
+print("="*80) 
+
+print(" * Reading pickle db")
+
+if pickle_file.exists():
+    with open(pickle_file, "rb") as f:
+        db_items, db_version = pickle.load(f)
+else:
+    db_items = {}
+    db_version = 0
+
+print(" * Getting updates from Zotero")
+
+new_items = zot.everything(zot.items(since=db_version))
+
+print(f" * Got {len(new_items)} updates from Zotero")
+
+print(" * Processing updates received from Zotero")
+
+for item in new_items:
+    db_version = max(db_version, item['version'])
+    key = item['key']
+    db_items[key] = item
+    print("="*80) 
+    print('Item Key: %s' % item['key'])
+    print(' - version: %s' % item['version'])
+    for key in ['links', 'library', 'meta', 'data']:
+        print(' - %s:' % key)
+        for k,v in item[key].items():
+            print(f"    + {k:20.20} = {v!r:60.60}")
+
+print("="*80) 
+
+print(f" * Processed {len(new_items)} updates recerived from Zotero")
+
+print(" * Writting pickle file")
+
+with open(pickle_file, "wb") as f:
+    pickle.dump(
+        (db_items,db_version),
+        f,
+        4 # pickle.HIGHEST_PROTOCOL
+    )
+
+print("="*80) 
+
+broken_items = []
+problematic_items = []
+unfixable_items = []
+
+for item in db_items.values():
+    data = item['data']
+    if data['itemType'] != 'attachment':
+        continue
+    if data['linkMode'] != 'linked_file':
+        continue
+    item_title = data['title']
+    item_path = lib_dir / item_title
+    if not item_path.exists():
+        broken_items.append(item)
+    elif unidecode(item_title) != item_title:
+        if (lib_dir / unidecode(item_title)).exists():
+            unfixable_items.append(item)
+        else:
+            problematic_items.append(item)
+
+print(f" * Found {len(broken_items)} broken items")
+print(f" * Found {len(problematic_items)} problematic items (fixable)")
+print(f" * Found {len(unfixable_items)} problematic items (unfixable)")
+
+print("="*80) 
+
+if not problematic_items:
+    sys.exit()
+
+print(" * Computing updates")
+
+updates = []
+renames = []
+
+for item in problematic_items:
+    data = item['data']
+    update = {}
+    for k, v in data.items():
+        update[k] = v
+    file_name = data['title']
+    path = lib_dir / file_name
+    if not path.exists():
+        print(f" * FATAL ERROR! (original path does not exist)")
+        sys.exit(1)
+    fixed_file_name = unidecode(file_name)
+    fixed_path = lib_dir / fixed_file_name
+    if fixed_path.exists():
+        print(f" * FATAL ERROR! (fixed path already exists)")
+        sys.exit(1)
+    update['title'] = fixed_file_name
+    update['path'] = 'attachments:' + fixed_file_name
+    updates.append(update)
+    renames.append((path, fixed_path))
+
+if updates:
+
+    print("="*80) 
+
+    pprint(updates)
+
+    print("="*80) 
+
+    for path, fixed_path in renames:
+        print(path)
+        print("-->", fixed_path)
+
+print("="*80) 
+
+print(f" * Found {len(updates)} updates")
+
+while True:
+    print(" * Send updates to Zotero and fix files? [y/N] ", end="")
+    choice = input().lower()
+    if choice in ["", "n", "no"]:
+        should_update = False
+        print(" * Quitting")
+        break
+    elif choice in ["y", "yes"]:
+        should_update = True
+        break
+    else:
+        print(" * Please respond with one of: y yes n no.")
+
+if should_update:
+
+    print(" * Sending updates to Zotero")
+
+    zot.update_items(updates)
+
+    print(" * Fixing files")
+
+    for path, fixed_path in renames:
+        path.rename(fixed_path)
+
+    print(" * Done")
+
+print("="*80) 
+
