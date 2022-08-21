@@ -9,6 +9,7 @@
 set nocompatible                  "Use vim, not vi
 set directory^=$HOME/.vim/swap//  "Put all swap files together in one place
 set textwidth=79                  "Break lines after 79 chars
+set formatoptions+=l              "But do not brake a line if it was long
 set shiftwidth=4                  "Indent using four spaces
 set softtabstop=4
 set expandtab                     "Use only spaces

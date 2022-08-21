@@ -317,21 +317,44 @@ class TeXCompiler(object):
     def move_aux_files(self, direction):
         aux_extensions = [".aux", ".log", ".toc", ".bbl", ".brf", ".out",
                           ".blg", ".nav", ".snm", ".vrb", ".bcf", ".run.xml",
-                          ".spl"] # ".synctex.gz"
+                          ".spl", ".dpth", ".md5", ".auxlock"] # ".synctex.gz"
+        fig_extensions = [""] + [ "-figure" + str(i) for i in range(1000) ]
+        subdirs = ["", "figures"]
         for ext in aux_extensions:
-            file1 = self.job_name + ext
-            file2 = os.path.join(self.aux_dir, file1)
-            if direction == "to_aux_dir":
-                if os.path.exists(file1):
-                    if self.verbose:
-                        print("Moving `%s` to `%s`" %(file1,file2))
-                    os.rename(file1, file2)
-            elif direction == "from_aux_dir":
-                if not os.path.exists(file1):
-                    if os.path.exists(file2):
-                        if self.verbose:
-                            print("Moving `%s` to `%s`" %(file2,file1))
-                        os.rename(file2, file1)
+            for fig_ext in fig_extensions:
+                for subdir in subdirs:
+                    file1 = self.job_name + fig_ext + ext
+                    if subdir:
+                        file1 = os.path.join(subdir, file1)
+                        aux_subdir = os.path.join(self.aux_dir, subdir)
+                    file2 = os.path.join(self.aux_dir, file1)
+                    if direction == "to_aux_dir":
+                        if os.path.exists(file1):
+                            if subdir:
+                                if not os.path.exists(aux_subdir):
+                                    os.mkdir(aux_subdir)
+                            if self.verbose:
+                                print("Moving `%s` to `%s`" %(file1,file2))
+                            os.rename(file1, file2)
+                        if subdir:
+                            try:
+                                os.rmdir(subdir)
+                            except OSError:
+                                pass
+                    elif direction == "from_aux_dir":
+                        if subdir:
+                            if not os.path.exists(subdir):
+                                os.mkdir(subdir)
+                        if not os.path.exists(file1):
+                            if os.path.exists(file2):
+                                if self.verbose:
+                                    print("Moving `%s` to `%s`" %(file2,file1))
+                                os.rename(file2, file1)
+                                if subdir:
+                                    try:
+                                        os.rmdir(aux_subdir)
+                                    except OSError:
+                                        pass
 
     def move_files_to_aux_dir(self):
         if self.verbose:

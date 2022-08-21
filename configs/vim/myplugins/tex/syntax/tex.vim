@@ -4,7 +4,7 @@
 "
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-set iskeyword=@
+"set iskeyword=@
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 "
@@ -252,7 +252,7 @@ highlight link DefinitionParam C_PURPLE
 syntax region SectionArgumentGroup 
     \ matchgroup=C_GRAY
     \ start="{" skip="\\{\|\\}" end="}" 
-    \ contains=@NoSpell,SectionArgumentGroup,Command
+    \ contains=SectionArgumentGroup,Command
     \ contained
 syntax match Section
     \ "\s*\(\\\|%\)\(sub\)*\(part\|chapter\|section\|paragraph\)\>\*\?"

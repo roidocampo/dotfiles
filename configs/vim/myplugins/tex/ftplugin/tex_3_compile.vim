@@ -23,7 +23,7 @@ let b:tex_file = expand('%:p')
 let b:pdf_file = expand('%:p:r').'.pdf'
 
 " Use texcompile to get main tex_file
-let s:tc_output = system('texcompile -f ' . b:tex_file)
+let s:tc_output = system('texcompile -f ' . shellescape(b:tex_file))
 if ! v:shell_error
     let b:tex_file = split(s:tc_output, "\n")[0]
     "let b:pdf_file = fnamemodify(b:tex_file, ':r') . '.pdf'
@@ -61,8 +61,10 @@ function! s:TexView(open)
       let l:cmd.= ' -g -x'
     endif
     let l:cmd.= ' ' . line('.')
-    let l:cmd.= ' "' . b:pdf_file . '"'
-    let l:cmd.= ' "' . b:tex_file . '"'
+    " let l:cmd.= ' "' . b:pdf_file . '"'
+    " let l:cmd.= ' "' . b:tex_file . '"'
+    let l:cmd.= ' ' . shellescape(b:pdf_file)
+    let l:cmd.= ' ' . shellescape(b:tex_file)
     let l:output = system(l:cmd)
   endif
 endf

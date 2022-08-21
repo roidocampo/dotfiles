@@ -41,7 +41,7 @@ endfunction
 set foldmethod=manual
 setlocal foldtext=
     \matchstr('\ \ \ \ \ \ \ \ \ \ \ \ \ ','\ \\{,'.indent(v:foldstart).'}').
-    \'\ 祉('.(1+v:foldend-v:foldstart).'\ lines)'
+    \'\ ►\ ('.(1+v:foldend-v:foldstart).'\ lines)'
 
 call MyManualFold()
 

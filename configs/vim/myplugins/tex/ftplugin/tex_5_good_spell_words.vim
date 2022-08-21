@@ -23,7 +23,7 @@ function s:AddGoodWord()
     if l:prev_fold
         set nofoldenable
     endif
-    let l:word = expand("<cWORD>")
+    let l:word = expand("<cword>")
     normal G$
     let l:vsg_line_num = search('LocalWords\s*:',"bW")
     if l:vsg_line_num == 0
