@@ -223,13 +223,13 @@ if [ -x "$(command -v less)" ]; then
     MAN_LESS_OPTIONS="--RAW-CONTROL-CHARS"
     MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --squeeze-blank-lines"
     MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quiet"
-    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quit-at-eof"
     MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quit-if-one-screen"
-    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --tabs 1"
 
     if [ "$(function _t { echo "$2"; }; _t $(less -V))" -gt 500 ]; then
         MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --mouse"
         MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --wheel-lines 3"
+    else
+        MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quit-at-eof"
     fi
 
     function _man_less() {
