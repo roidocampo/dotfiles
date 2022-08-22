@@ -109,12 +109,13 @@ call plug#begin('~/.vim/bundle')
 
     "My filetype plugins
     if has('mac')
-        Plug '~/.vim/myplugins/tex',   { 'for': 'tex' }
+        Plug '~/.vim/myplugins/tex',      { 'for': 'tex' }
     endif
-    Plug '~/.vim/myplugins/vert_help', { 'for': 'help' }
-    Plug '~/.vim/myplugins/singular',  { 'for': 'singular' }
-    Plug '~/.vim/myplugins/inb',       { 'for': 'inb' }
-    Plug '~/.vim/myplugins/css_align', { 'for': ['css', 'html', 'bib', 'php'] }
+    Plug '~/.vim/myplugins/vert_help',    { 'for': 'help' }
+    Plug '~/.vim/myplugins/singular',     { 'for': 'singular' }
+    Plug '~/.vim/myplugins/inb',          { 'for': 'inb' }
+    Plug '~/.vim/myplugins/css_align',    { 'for': ['css', 'html', 'bib', 'php'] }
+    Plug '~/.vim/myplugins/php_fixspell', { 'for': 'php' }
 
 call plug#end()
 
