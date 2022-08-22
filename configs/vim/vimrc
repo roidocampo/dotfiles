@@ -34,7 +34,9 @@ set wildmenu                      "Nice menu for completing commands
 set spelllang=en_us,math          "Default dictionary
 set confirm                       "Ask before quitting if there are changes
 set hidden                        "Allow `unsaved` buffers
+if v:version >= 802
 set completeopt=menuone,noselect  "More normal completions
+endif
 set guioptions-=r                 "No scrollbar on gui
 set scrolloff=1                   "Show one line above/below cursor
 set sidescrolloff=5               "Show 5 colomuns left/right of cursor
@@ -71,7 +73,7 @@ call plug#begin('~/.vim/bundle')
     Plug 'chriskempson/base16-vim'
     Plug 'ConradIrwin/vim-bracketed-paste'
     Plug 'ervandew/supertab'
-    if empty($INSUDOEDIT)
+    if empty($INSUDOEDIT) && v:version >= 802
         Plug 'SirVer/ultisnips'
     endif
     Plug 'godlygeek/tabular'
@@ -100,7 +102,7 @@ call plug#begin('~/.vim/bundle')
     "My blobal plugins
     Plug '~/.vim/myplugins/diff_colors'
     Plug '~/.vim/myplugins/myultisnips'
-    if empty($INSUDOEDIT)
+    if empty($INSUDOEDIT) && v:version >= 802
         Plug '~/.vim/myplugins/tmux_send_keys'
         Plug '~/.vim/myplugins/tmux_clipboard'
     endif

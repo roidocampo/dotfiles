@@ -220,6 +220,18 @@ fi
 
 if [ -x "$(command -v less)" ]; then
 
+    MAN_LESS_OPTIONS="--RAW-CONTROL-CHARS"
+    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --squeeze-blank-lines"
+    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quiet"
+    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quit-at-eof"
+    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --quit-if-one-screen"
+    MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --tabs 1"
+
+    if [ "$(function _t { echo "$2"; }; _t $(less -V))" -gt 500 ]; then
+        MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --mouse"
+        MAN_LESS_OPTIONS="$MAN_LESS_OPTIONS --wheel-lines 3"
+    fi
+
     function _man_less() {
         LESS_TERMCAP_mb=$'\E[36m'     \
         LESS_TERMCAP_md=$'\E[36m'     \
@@ -229,8 +241,7 @@ if [ -x "$(command -v less)" ]; then
         LESS_TERMCAP_us=$'\E[36m'     \
         LESS_TERMCAP_ue=$'\E[0m'        \
         MANPATH="$CONDA_PREFIX/share/man:" \
-        LESS="--mouse --wheel-lines 3" \
-        PAGER="less -R" \
+        PAGER="less $MAN_LESS_OPTIONS" \
         \man "$@"
     }
 
@@ -440,7 +451,11 @@ function cenv() {
         *)
             local REQ_ENV
             if [ "$1" ]; then
-                REQ_ENV=env-"$1"
+                if [ "x$1" = "xenv0" ]; then
+                    REQ_ENV=env0
+                else
+                    REQ_ENV=env-"$1"
+                fi
             elif [ -f "environment.yml" ]; then
                 REQ_ENV=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
             fi
