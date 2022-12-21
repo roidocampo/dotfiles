@@ -91,6 +91,8 @@ syntax match ShortComment
     \ contains=@NoSpell
 syntax match LongComment
     \ "%%.*$"
+syntax match LongComment
+    \ "%:.*$"
 syntax match JinjaComment
     \ "%#.*$"
     \ contains=@NoSpell

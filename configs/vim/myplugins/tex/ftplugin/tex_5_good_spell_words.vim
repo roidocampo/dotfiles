@@ -4,8 +4,13 @@ if exists("s:good_words_loaded")
 endif
 let s:good_words_loaded = 1
 
+let s:lw_addfile = '.localwords.utf-8.add'
+let s:lw_splfile = s:lw_addfile . '.spl'
+
+let s:has_local_words = 0
 function s:InitialAddGoodWords()
     while search('LocalWords\s*:','W')
+        let s:has_local_words = 1
         let l:sline = getline('.')
         let l:slineend = matchstr(l:sline, ':\s*\zs.*')
         let l:words = split(l:slineend)
@@ -13,9 +18,10 @@ function s:InitialAddGoodWords()
             silent execute 'spellgood!' l:word
         endfor
     endwhile
+    if s:has_local_words == 0
+        let &spellfile = s:lw_addfile
+    endif
 endfunction
-
-call s:InitialAddGoodWords()
 
 function s:AddGoodWord()
     let l:winview = winsaveview()
@@ -42,4 +48,33 @@ function s:AddGoodWord()
     call winrestview(l:winview)
 endfunction
 
-nmap <LocalLeader>g :call <SID>AddGoodWord()<CR>
+function s:FirstAddGoodWord()
+    if s:has_local_words == 0
+        if !filereadable(s:lw_addfile)
+            if has('mac')
+                let l:ret = system('touch ' . s:lw_addfile)
+            endif
+        endif
+        if !filereadable(s:lw_splfile)
+            if has('mac')
+                let l:ret = system('touch ' . s:lw_splfile)
+            endif
+        endif
+        let l:ret = system('xattr -w com.dropbox.ignored 1 ' . s:lw_addfile)
+        let l:ret = system('xattr -w com.dropbox.ignored 1 ' . s:lw_splfile)
+        nmap <LocalLeader>g zg
+        normal zg
+    else
+        nmap <LocalLeader>g :call <SID>AddGoodWord()<CR>
+        call s:AddGoodWord()
+    endif
+endfunction
+
+let s:output = system('git rev-parse --show-toplevel')
+if ! v:shell_error
+    let &spellfile = split(s:output, "\n")[0] . s:lw_addfile
+    nmap <LocalLeader>g zg
+else
+    call s:InitialAddGoodWords()
+    nmap <LocalLeader>g :call <SID>FirstAddGoodWord()<CR>
+endif

@@ -10,7 +10,8 @@ set autochdir
 "---------------------------------------------------------------------------------------------------
 
 function! MyManualFold()
-  let pat = "\\(^\\s*[%\\\\]\\(section\\|chapter\\|part\\)\\W\\|^%% .*%%%\\)"
+  normal zE
+  let pat = "\\(^\\s*[%\\\\]\\(section\\|chapter\\|part\\)\\W\\|^%% .*%%%\\|^%:.*\\)"
   let sec_line = search(pat, "cWn")
   while 1
     if (sec_line == 0)
@@ -45,61 +46,63 @@ setlocal foldtext=
 
 call MyManualFold()
 
+nnoremap <buffer> <leader>f :0<cr>:call MyManualFold()<cr>
+
 "---------------------------------------------------------------------------------------------------
 "-                                                                                                 -
 "-  mappings                                                                                       -
 "-                                                                                                 -
 "---------------------------------------------------------------------------------------------------
 
-imap α \alpha
-imap σ \sigma
-imap δ \delta
-imap φ \phi
-imap γ \gamma
-imap η \eta
-imap ξ \xi
-imap κ \kappa
-imap λ \lambda
-imap ζ \zeta
-imap χ \chi
-imap ψ \psi
-imap ω \omega
-imap β \beta
-imap ν \nu
-imap μ \mu
-imap ε \varepsilon
-imap ρ \rho
-imap τ \tau
-imap υ \upsilon
-imap θ \theta
-imap ι \iota
-imap ο o
-imap π \pi
-
-imap Α A
-imap Σ \Sigma
-imap Δ \Delta
-imap Φ \Phi
-imap Γ \Gamma
-imap Η \Eta
-imap Ξ \Xi
-imap Κ K
-imap Λ \Lambda
-imap Ζ Z
-imap Χ X
-imap Ψ \Psi
-imap Ω \Omega
-imap Β B
-imap Ν N
-imap Μ M
-imap Ε E
-imap Ρ P
-imap Τ T
-imap Υ Y
-imap Θ \Theta
-imap Ι I
-imap Ο O
-imap Π \Pi
+" imap α \alpha
+" imap σ \sigma
+" imap δ \delta
+" imap φ \phi
+" imap γ \gamma
+" imap η \eta
+" imap ξ \xi
+" imap κ \kappa
+" imap λ \lambda
+" imap ζ \zeta
+" imap χ \chi
+" imap ψ \psi
+" imap ω \omega
+" imap β \beta
+" imap ν \nu
+" imap μ \mu
+" imap ε \varepsilon
+" imap ρ \rho
+" imap τ \tau
+" imap υ \upsilon
+" imap θ \theta
+" imap ι \iota
+" imap ο o
+" imap π \pi
+" 
+" imap Α A
+" imap Σ \Sigma
+" imap Δ \Delta
+" imap Φ \Phi
+" imap Γ \Gamma
+" imap Η \Eta
+" imap Ξ \Xi
+" imap Κ K
+" imap Λ \Lambda
+" imap Ζ Z
+" imap Χ X
+" imap Ψ \Psi
+" imap Ω \Omega
+" imap Β B
+" imap Ν N
+" imap Μ M
+" imap Ε E
+" imap Ρ P
+" imap Τ T
+" imap Υ Y
+" imap Θ \Theta
+" imap Ι I
+" imap Ο O
+" imap Π \Pi
 
 call IMAP ('`0', '\emptyset',      'tex')
 call IMAP ('`1', '\left',          'tex')

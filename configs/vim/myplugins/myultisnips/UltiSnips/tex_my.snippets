@@ -1,17 +1,53 @@
-snippet doc
+snippet tdoc
+\documentclass[a4paper,11pt,reqno]{amsart}
+
+\usepackage[utf8]{inputenc}
+
+\usepackage{mathcommand}
+
+\usepackage[
+    % margin=1.3in,
+    hscale=0.7,
+    vscale=0.75,
+    headheight=13pt,
+    marginpar=2cm,
+    centering,
+    % showframe
+]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\mathtoolsset{centercolon}
+\usepackage{stmaryrd}
+\usepackage{mathdots}
+\usepackage{mathabx}
+\usepackage{framed}
+\usepackage{array}
+\usepackage[shortlabels]{enumitem}
+
+\begin{document}
+
+${0}
+
+\end{document}
+endsnippet
+
+snippet sdoc
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%                                                                       %%
 %%   A document                                                          %%
 %%                                                                       %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%section{Preamble}
+%: Preamble
 
-\documentclass[letter,11pt,reqno]{amsart}
+\documentclass[a4paper,11pt,reqno]{amsart}
 
 \usepackage[utf8]{inputenc}
 
-\usepackage{etex}
+\usepackage{mathcommand}
 
 \usepackage{xcolor}
 
@@ -33,9 +69,10 @@ snippet doc
 
 \usepackage[
     % margin=1.3in,
-    hscale=0.70,
-    vscale=0.775,
+    hscale=0.7,
+    vscale=0.75,
     headheight=13pt,
+    marginpar=2cm,
     centering,
     % showframe
 ]{geometry}
@@ -44,28 +81,358 @@ snippet doc
 \usepackage{amsthm}
 \usepackage{amssymb}
 \usepackage{mathtools}
+\mathtoolsset{centercolon}
 \usepackage{stmaryrd}
 \usepackage{mathdots}
+\usepackage{mathabx}
 \usepackage{framed}
 \usepackage[capitalize]{cleveref}
 \usepackage{array}
+\usepackage[shortlabels]{enumitem}
 \usepackage[alphabetic]{amsrefs}
-\usepackage[all,cmtip]{xy}
+\usepackage{tikz}
+\usetikzlibrary{cd}
 
 \begin{document}
 
-%section{Content}
+%: Content
 
 ${0}
 
-%section{-}
-
 \end{document}
-
-% TeXCompile: aux-dir aux
-% TeXCompile: synctex off
 endsnippet
 
+snippet doc
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%                                                                       %%
+%%   A document                                                          %%
+%%                                                                       %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%: Preamble
+
+\documentclass[a4paper,11pt,reqno]{amsart}
+
+\usepackage[utf8]{inputenc}
+
+\usepackage{mathcommand}
+
+\usepackage{xcolor}
+
+\definecolor{verydarkblue}{rgb}{0,0,0.5}
+
+\usepackage[
+    breaklinks,
+    colorlinks,
+    citecolor=verydarkblue,
+    linkcolor=verydarkblue,
+    urlcolor=verydarkblue,
+    pagebackref=true,
+    hyperindex
+]{hyperref}
+
+\backrefenglish
+
+\usepackage{fancyhdr}
+
+\usepackage[
+    % margin=1.3in,
+    hscale=0.7,
+    vscale=0.75,
+    headheight=13pt,
+    marginpar=2cm,
+    centering,
+    % showframe
+]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\mathtoolsset{centercolon}
+\usepackage{stmaryrd}
+\usepackage{mathdots}
+\usepackage{mathabx}
+\usepackage{framed}
+\usepackage[capitalize]{cleveref}
+\usepackage{array}
+\usepackage[shortlabels]{enumitem}
+\usepackage[alphabetic]{amsrefs}
+\usepackage{tikz}
+\usetikzlibrary{cd}
+
+%: Theorem environments
+
+\theoremstyle{plain}
+
+\newtheorem{introtheorem}{Theorem}
+\renewcommand{\theintrotheorem}{\Alph{introtheorem}}
+\crefname{introtheorem}{Theorem}{Theorems}
+
+\newtheorem{introcorollary}[introtheorem]{Corollary}
+\renewcommand{\theintrotheorem}{\Alph{introtheorem}}
+\crefname{introcorollary}{Corollary}{Corollaries}
+
+\newtheorem*{theorem*}{Theorem}
+
+\newtheorem{theorem}{Theorem}%[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{question}[theorem]{Question}
+
+\theoremstyle{definition}
+
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{situation}[theorem]{Situation}
+\newtheorem{case}{Case}
+
+\theoremstyle{remark}
+
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{example}[theorem]{Example}
+
+\numberwithin{figure}{section}
+%\renewcommand{\thefigure}{\thesection\Alph{figure}}
+
+\numberwithin{equation}{section}
+%\renewcommand{\theequation}{\thesection\alph{equation}}
+
+\IfFileExists{./article-style.tex}{\input{article-style.tex}}{}
+
+%: Convenience macros
+
+%% blackboard bold symbols
+
+\LoopCommands{NZQRCAPH}[#1]
+    {\DeclareDocumentMathCommand#2{}{\mathbb#1}}
+
+\LoopCommands\lettersUppercase[#1#1]
+    {\DeclareDocumentMathCommand#2{}{\mathbb#1}}
+
+%% bold math letters
+
+\LoopCommands{abdcehkuvwxyzDRNT}[b#1]
+    {\NewDocumentMathCommand#2{}{\mathbf#1}}
+
+%% calligraphic math
+
+\LoopCommands{BEFIJKMLOUVXY}[#1]
+    {\DeclareDocumentMathCommand#2{}{\mathcal#1}}
+
+\LoopCommands\lettersUppercase[c#1]
+    {\NewDocumentMathCommand#2{}{\mathcal#1}}
+
+%% Fraktur math
+
+\LoopCommands\lettersUppercase[f#1]
+    {\NewDocumentMathCommand#2{}{\mathfrak#1}}
+
+\LoopCommands{abcdeghjklmnopqrstuvwxyz}[f#1]
+    {\NewDocumentMathCommand#2{}{\mathfrak#1}}
+
+%% Greek letters
+
+\DeclareDocumentMathCommand \a  {} {\alpha}
+\DeclareDocumentMathCommand \b  {} {\beta}
+%DeclareDocumentMathCommand \c  {} {\chi}
+\DeclareDocumentMathCommand \d  {} {\delta}
+\DeclareDocumentMathCommand \ep {} {\varepsilon}
+\DeclareDocumentMathCommand \f  {} {\varphi}
+\DeclareDocumentMathCommand \g  {} {\gamma}
+\DeclareDocumentMathCommand \e  {} {\eta}
+\DeclareDocumentMathCommand \i  {} {\iota}
+%DeclareDocumentMathCommand \j  {} {}
+\DeclareDocumentMathCommand \k  {} {\kappa}
+\DeclareDocumentMathCommand \l  {} {\lambda}
+\DeclareDocumentMathCommand \m  {} {\mu}
+\DeclareDocumentMathCommand \n  {} {\nu}
+%DeclareDocumentMathCommand \o  {} {\omicron}
+\DeclareDocumentMathCommand \p  {} {\pi}
+%DeclareDocumentMathCommand \q  {} {\theta}
+\DeclareDocumentMathCommand \r  {} {\rho}
+\DeclareDocumentMathCommand \s  {} {\sigma}
+\DeclareDocumentMathCommand \t  {} {\tau}
+\DeclareDocumentMathCommand \ff {} {\psi}
+%DeclareDocumentMathCommand \v  {} {}
+\DeclareDocumentMathCommand \om {} {\omega}
+\DeclareDocumentMathCommand \x  {} {\xi}
+%DeclareDocumentMathCommand \y  {} {\upsilon}
+\DeclareDocumentMathCommand \z  {} {\zeta}
+
+%DeclareDocumentMathCommand \A  {} {\Alpha}
+%DeclareDocumentMathCommand \B  {} {\Beta}
+%DeclareDocumentMathCommand \C  {} {\Chi}
+\DeclareDocumentMathCommand \D  {} {\Delta}
+%DeclareDocumentMathCommand \E  {} {\Epsilon}
+%DeclareDocumentMathCommand \F  {} {\Phi}
+\DeclareDocumentMathCommand \G  {} {\Gamma}
+%DeclareDocumentMathCommand \H  {} {\Eta}
+%DeclareDocumentMathCommand \I  {} {\Iota}
+%DeclareDocumentMathCommand \J  {} {}
+%DeclareDocumentMathCommand \K  {} {\Kappa}
+%DeclareDocumentMathCommand \L  {} {\Lambda}
+%DeclareDocumentMathCommand \M  {} {\Mu}
+%DeclareDocumentMathCommand \N  {} {\Nu}
+%DeclareDocumentMathCommand \O  {} {\Omicron}
+%DeclareDocumentMathCommand \P  {} {\Pi}
+%DeclareDocumentMathCommand \Q  {} {\Theta}
+%DeclareDocumentMathCommand \R  {} {\Rho}
+\DeclareDocumentMathCommand \S  {} {\Sigma}
+%DeclareDocumentMathCommand \T  {} {\Tau}
+%DeclareDocumentMathCommand \U  {} {\Psi}
+%DeclareDocumentMathCommand \V  {} {}
+\DeclareDocumentMathCommand \Om {} {\Omega}
+%DeclareDocumentMathCommand \X  {} {\Xi}
+%DeclareDocumentMathCommand \Y  {} {\Upsilon}
+%DeclareDocumentMathCommand \Z  {} {}
+
+%% operator-like
+
+\LoopCommands{
+    {coker} {im} {Im} {tr} {sign} {id} {Id}
+    {codim} {rk} {rank} {trdeg} {Frac}
+    {GL} {SL} {Sp} {PGL}
+    {Gr} {Hilb} {Quot}
+    {Aut} {End} {Bir}
+    {Spec} {Proj} {Spf} {Sing}
+    {val} {ord} {mult} {length} {height} {vol} {volume}
+    {jac} {Jac} {Fitt}
+    {Sym} {Ext} {Hom} {Tor}
+    {lct} {mld}
+    {char}
+    {Ex} {Exc} {Supp}
+    {Pic} {NS} {Div} {CDiv} {WDiv} {Cl}
+    {div}
+    {Der} {HDer} {IDer}
+}[#1]{\DeclareDocumentMathCommand#2{}{\operatorname{#1}}}
+
+%% roman math (e.g., categories)
+
+\LoopCommands{
+    {reg} {sm} {sing} {red} {lci} {pt} {op}
+    {Cat} {Set} {sSet} {Sh} {PSh} {Top} {Man} {Arr}
+    {Grp} {Rng} {Sch} {AffSch} {Var} {Ab} {Alg} {Mod} {CRng}
+    {DRng} {DAlg}
+}[#1]{\DeclareDocumentMathCommand#2{}{{\operatorname{#1}}}}
+
+%% limits and colimits
+
+\NewDocumentMathCommand{\dirlim}{}{\varinjlim}
+\NewDocumentMathCommand{\invlim}{}{\varprojlim}
+
+\DeclareMathOperator*{\colim}{colim}
+
+%% sheaf Hom and sheaf Ext
+
+\NewDocumentMathCommand\SheafHom{}%
+    {\operatorname{\mathcal{H}\!{\it om}}}
+
+\NewDocumentMathCommand\SheafExt{}%
+    {\operatorname{\mathcal{E}\!{\it xt}}}
+
+%% set-minus
+
+\RenewDocumentMathCommand \setminus {} {\smallsetminus}
+
+%% tildes, hats, dot, circles, starts, under- and over-lines
+
+\DeclareDocumentMathCommand \.  { } {\cdot}
+\DeclareDocumentMathCommand \o  { } {\circ}
+\DeclareDocumentMathCommand \^  {m} {\widehat{#1}}
+\DeclareDocumentMathCommand \v  {m} {\widecheck{#1}}
+\DeclareDocumentMathCommand \~  {m} {\widetilde{#1}}
+\DeclareDocumentMathCommand \ov {m} {\overline{#1}}
+\DeclareDocumentMathCommand \un {m} {\underline{#1}}
+
+%% completed tensors and products
+
+\DeclareDocumentMathCommand \ctimes  {} {\mathop{\widehat{\smash{\times}}}\nolimits}
+\DeclareDocumentMathCommand \cotimes {} {\mathop{\widehat\otimes}\nolimits}
+
+%% easier auto-adjusting parentheses
+
+\DeclareDocumentMathCommand \( {} {\left(}
+\DeclareDocumentMathCommand \) {} {\right)}
+
+
+\begin{document}
+
+%: Title and abstract
+
+% Title and authors
+
+% \title{Something amazing}
+% 
+% \author{Roi Docampo}
+% 
+% \address[R.\ Docampo]{%
+% Department of Mathematics\\
+% University of Oklahoma\\
+% 601 Elm Avenue, Room 423\\
+% Norman, OK 73019 (USA)%
+% }
+% 
+% \email{roi@ou.edu}
+
+% \subjclass[2020]{%
+% Primary {\scriptsize 14E18};
+% Secondary {\scriptsize 14B25}.}
+% \keywords{Arc space, generically finite morphism, embedding dimension, stable point.}
+
+
+% \thanks{%
+% The research of the third author was partially supported by a grant from the
+% Simons Foundation (638459,~RD)%
+% }
+
+% \begin{abstract}
+% \end{abstract}
+
+% \thanks{Compiled on \today}
+
+% \maketitle
+
+
+%: Introduction
+
+${0}
+
+
+%: References
+
+\begin{bibdiv}
+\begin{biblist}
+
+\bib{ega-iv-pt1}{article}{
+   % label={EGA-4.1},
+   author={Grothendieck, Alexander},
+   secondauthor={Dieudonn{\'e}, Jean A.},
+   title={\'{E}l\'{e}ments de g\'{e}om\'{e}trie alg\'{e}brique. IV. \'{E}tude locale des sch\'{e}mas et
+       des morphismes de sch\'{e}mas. I},
+   language={French},
+   journal={Inst. Hautes \'{E}tudes Sci. Publ. Math.},
+   number={20},
+   date={1964},
+   pages={259},
+   issn={0073-8301},
+   review={\MR{173675}},
+}
+
+\bib{stacks-project}{webpage}{
+    author = {{{Stac}ks Project Authors}, The},
+    title  = {The Stacks Project},
+    url    = {http://stacks.math.columbia.edu},
+}
+
+\end{biblist}
+\end{bibdiv}
+
+\end{document}
+endsnippet
 
 snippet "b(egin)?" "begin{} / end{}" br
 \begin{${1:something}}
