@@ -146,16 +146,253 @@ alias la="$ls_cmd -A"
 alias ll="_ls_hidden -l"
 
 ###########################################################################
+# tree
+###########################################################################
+
+function _sortarray() {
+    declare -n array_ref=$1
+    declare IFS=$'\n'
+    readarray -t array_ref < <(
+        echo -n "${array_ref[*]}" \
+            | sort -Vf
+    )
+}
+
+function _t_reset() {
+    declare -g _t_show_all="false"
+    declare -g _t_long="false"
+    declare -g _t_natural_sort="false"
+    declare -g _t_incomplete="false"
+
+    declare -g -i _t_max_level=4
+    declare -g -i _t_max_files=1000
+    declare -g -i _t_num_files=0
+
+    declare -g -a _t_roots=()
+    declare -g -a _t_names=( "." )
+    declare -g -a _t_prefixes=( "" )
+
+    [ "$1" = "--keep-files" ] || \
+        declare -g -a _t_files=( "." )
+}
+
+function _t_proc_args() {
+    while [ "$#" -gt 0 ]; do
+        if [ "${1:0:2}" = "--" ]; then
+            case "${1:2}" in
+                "depth")
+                    (( _t_max_level=$2 )); shift ;;
+                "max" | "max-files" | "limit" )
+                    (( _t_max_files=$2 )); shift ;;
+            esac
+        elif [ "${1:0:1}" = "-" ]; then
+            for (( i=1; i < ${#1}; i+=1 )); do
+                case "${1:${i}:1}" in
+                    "d") _t_max_level+=1 ;;
+                    "D") _t_max_level+=-1 ;;
+                    "a") _t_show_all="true" ;;
+                    "l") _t_long="true" ;;
+                    "v") [ "$_t_natural_sort" = "true" ] \
+                        && _t_natural_sort="false" \
+                        || _t_natural_sort="true" ;;
+                esac
+            done
+        else
+            _t_roots+=( "$1" )
+        fi
+        shift
+    done
+}
+
+function _t_check_max_files() {
+    if [[ _max_files > 0 && _t_num_files -ge _t_max_files ]]; then
+        _t_incomplete="true"
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _t_traverse() {
+    declare directory="$1"
+    declare prefix="$2"
+    declare level="$3"
+    declare -a children
+    declare child_count idx child nam pointer child_prefix
+
+    if [ "$level" -gt "$_t_max_level" ]; then
+        return
+    fi
+
+    children=( "$directory"/* )
+
+    [ "$_t_natural_sort" = "true" ] && _sortarray children
+
+    child_count=${#children[@]}
+
+    for idx in "${!children[@]}"; do 
+
+        _t_check_max_files && break
+
+        child=${children[$idx]}
+        name=${child##*/}
+
+        pointer="├── "
+        child_prefix="│   "
+
+        if [ $idx -eq $((child_count - 1)) ]; then
+            pointer="└── "
+            child_prefix="    "
+        fi
+
+        _t_files+=( "${child}" )
+        _t_names+=( "${name}" )
+        _t_prefixes+=( "${prefix}${pointer}" )
+        _t_num_files+=1
+
+        [ -d "$child" ] \
+            && _t_traverse "$child" "${prefix}$child_prefix" $((level + 1))
+
+    done
+}
+
+function _t_tree() {
+
+    _t_reset
+    _t_proc_args "$@"
+
+    shopt -s nullglob
+    shopt -s nocaseglob
+    [ "$_t_show_all" = "true" ] && shopt -s dotglob
+
+    declare IFS=$'\n'
+    declare root i line aux namecol file prefix ame lsinfo lsname
+    declare -a lines
+
+    if [ "${#_t_roots[@]}" -eq 0 ]; then
+        _t_roots=( * )
+    fi
+
+    [ "$_t_natural_sort" = "true" ] && _sortarray roots
+
+    for root in "${_t_roots[@]}"; do
+        _t_check_max_files && break
+        _t_files+=( "$root" )
+        _t_names+=( "$root" )
+        _t_prefixes+=( "" )
+        _t_num_files+=1
+        _t_traverse "$root" "" "2"
+    done
+
+    set -f
+    if [ "$_t_long" = "true" ]; then
+        lines=( $(ls --color=always -lhdU -- "${_t_files[@]}") )
+    else
+        lines=( $(ls --color=always -1hdU -- "${_t_files[@]}") )
+    fi
+    set +f
+
+    namecol=0
+
+    for i in "${!lines[@]}"; do
+        line="${lines[$i]}"
+        if [ "$i" -eq "0" ]; then
+            aux="${line%%$'\e'*}"
+            namecol="${#aux}"
+            continue
+        fi
+        file="${_t_files[$i]}"
+        prefix="${_t_prefixes[$i]}"
+        name="${_t_names[$i]}"
+        lsinfo="${line:0:$namecol}"
+        lsname="${line:$namecol}"
+        printf \
+            " %*s %s\e[38;5;19m│\e[0m " \
+            "${#_t_num_files}" "$i" \
+            "$lsinfo"
+        #if [ "$namecol" -gt "0" ]; then
+        #    lsinfo="${line:0:$((namecol-1))}"
+        #    lsname="${line:$namecol}"
+        #    #printf "\e[38;5;17m%${#_t_num_files}s\e[38;5;19m %s\e[0m │ " "$i" "$lsinfo"
+        #    printf " %${#_t_num_files}s %s \e[38;5;19m│\e[0m " "$i" "$lsinfo"
+        #else
+        #    lsname="${line}"
+        #    #printf "[ \e[38;5;17m%${#_t_num_files}s\e[0m ] " "$i"
+        #    printf " %${#_t_num_files}s \e[38;5;19m│\e[0m " "$i"
+        #fi
+        echo "${prefix}${lsname/${file}/${name}}"
+    done
+
+    if [ "$_t_incomplete" = "true" ]; then
+        printf \
+            "%*.*s⁞ %*.*s\e[38;5;19m⁞\e[0m " \
+            "${#_t_num_files}" "${#_t_num_files}" "" \
+            "${#lsinfo}" "${#lsinfo}" ""
+        # for (( i=0; i<${#lsinfo}; i++ )); do
+        #     [ "$i" -lt "3" ] && echo -n "." || echo -n " "
+        # done
+        for (( i=0; i<${#prefix}; i++ )); do
+            if [ "${prefix:$i:1}" = "│" ]; then
+                echo -n "⁞"
+            elif [ "${prefix:$i:1}" = "├" ]; then
+                echo -n "⁞"
+            else
+                echo -n " "
+            fi
+        done
+        echo "⁞"
+        echo "Note: Output truncated after ${_t_max_files} entries."
+    fi
+
+    _t_reset --keep-files
+
+    shopt -u nullglob
+    shopt -u nocaseglob
+    shopt -u dotglob
+
+}
+
+alias t="_t_tree"
+alias ta="_t_tree -a"
+alias tl="_t_tree -l"
+alias tal="_t_tree -al"
+alias tla="_t_tree -la"
+alias tt="_t_tree -l"
+alias tta="_t_tree -la"
+
+###########################################################################
 # vi/vim
 ###########################################################################
 
+function _v_vim()
+{
+    declare cmd=$1
+    shift
+    declare re='^[1-9][0-9]*$'
+    if [[ $# = 1 && $1 =~ $re && $1 -le ${#_t_files[@]} ]] ; then
+        command "$cmd" "${_t_files[$1]}"
+    else
+        command "$cmd" "$@"
+    fi
+}
+
 if [ -x "$(command -v vim)" ]; then
 
-    alias vi=vim
+    alias vi="_v_vim vim"
 
 else
 
     unalias vi 2>/dev/null
+
+fi
+
+if [ -x "$(command -v view)" ]; then
+
+    alias view="_v_vim view"
+
+else
+
+    unalias view 2>/dev/null
 
 fi
 
