@@ -1,0 +1,8 @@
+#!/bin/bash
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+exec \
+    ~/opt/miniconda3/envs/env-dev-qpageview/bin/python3.9 \
+    "$SCRIPT_DIR"/aviewer.py \
+    "$@"
