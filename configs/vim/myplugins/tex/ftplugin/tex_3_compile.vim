@@ -11,6 +11,8 @@ let b:use_synctex = 0
 let b:tex_file = expand('%:p')
 let b:pdf_file = expand('%:p:r').'.pdf'
 let b:synctex_file = expand('%:p:r').'.synctex.gz'
+let b:synctex_dir = expand('%:p:h')
+let b:use_synctex_dir = 0
 
 " " This uses just rubber
 " let &makeprg='rubber --pdf -c "set program pdflatex-synctex" %<'
@@ -39,10 +41,17 @@ function! s:SetupLatTeXMk(use_synctex)
     if a:use_synctex == 2
         if filereadable(b:synctex_file)
             let b:use_synctex = 1
-        elseif filereadable(b:pdf_file)
-            let b:use_synctex = 0
         else
-            let b:use_synctex = 1
+            let b:synctex_dir = expand('%:p:h').'/.aux'
+            let b:synctex_file = b:synctex_dir.'/'.expand('%:p:t:r').'.synctex.gz'
+            if filereadable(b:synctex_file)
+                let b:use_synctex = 1
+                let b:use_synctex_dir = 1
+            elseif filereadable(b:pdf_file)
+                let b:use_synctex = 0
+            else
+                let b:use_synctex = 1
+            endif
         endif
     else
         let b:use_synctex = a:use_synctex
@@ -108,10 +117,14 @@ endif
 "------------------------------------------------------------------------------------
 
 let b:tex_viewer_opened = 0
+let s:use_skim = 0
 let s:skim_display_line = expand("<sfile>:p:h") . "/skim_display_line"
+let s:use_aViewer = 1
+let s:aViewer_synctex = "open -n -a aViewer.app --args --synctex"
+let s:aViewer_open = "open -a aViewer.app"
 
 function! s:TexView(open)
-  if has('mac') && (b:tex_viewer_opened==1 || a:open==1)
+  if has('mac') && (s:use_skim==1) && (b:tex_viewer_opened==1 || a:open==1)
     let b:tex_viewer_opened = 1
     let l:cmd = s:skim_display_line
     let l:cmd.= ' -r'
@@ -124,6 +137,29 @@ function! s:TexView(open)
     let l:cmd.= ' ' . shellescape(b:pdf_file)
     let l:cmd.= ' ' . shellescape(b:tex_file)
     let l:output = system(l:cmd)
+  elseif has('mac') && (s:use_aViewer==1) && (b:tex_viewer_opened==1 || a:open==1)
+    if b:tex_viewer_opened == 0
+      let b:tex_viewer_opened = 1
+      " open pdf in aViewer
+      let l:cmd = s:aViewer_open
+      let l:cmd.= ' ' . shellescape(b:pdf_file)
+      let l:output = system(l:cmd)
+    else
+      " sync aViewer position
+      let l:cmd = s:aViewer_synctex
+      let l:cmd.= ' ' . line('.')
+      let l:cmd.= ' ' . col('.')
+      let l:cmd.= ' ' . shellescape(b:tex_file)
+      let l:cmd.= ' ' . shellescape(b:pdf_file)
+      if b:use_synctex_dir == 1
+          let l:cmd.= ' ' . shellescape(b:synctex_dir)
+      endif
+      let l:output = system(l:cmd)
+      " bring aViewer to front
+      " let l:cmd = s:aViewer_open
+      " let l:cmd.= ' ' . shellescape(b:pdf_file)
+      " let l:output = system(l:cmd)
+    endif
   endif
 endf
 
@@ -139,8 +175,8 @@ endfunction
 
 function! s:TexAuxCleanup()
     if b:use_synctex == 0
-        if filereadable(b:syntex_file)
-            call delete(b:syntex_file)
+        if filereadable(b:synctex_file)
+            call delete(b:synctex_file)
         endif
     endif
     call delete('.aux', 'd')

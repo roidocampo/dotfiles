@@ -8,7 +8,10 @@ import os
 import qpageview
 import qpageview.highlight
 import qpageview.magnifier
+import qpageview.poppler
 import qpageview.rubberband
+import qpageview.widgetoverlay
+import subprocess
 import sys
 import tempfile
 import webbrowser
@@ -19,6 +22,18 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
+
+class FixedPopplerRenderer(qpageview.poppler.PopplerRenderer):
+    def setRenderHints(self, doc):
+        """Set the poppler render hints we want to set."""
+        import popplerqt5
+        if self.antialiasing:
+            doc.setRenderHint(popplerqt5.Poppler.Document.Antialiasing)
+            doc.setRenderHint(popplerqt5.Poppler.Document.TextAntialiasing)
+            # doc.setRenderHint(popplerqt5.Poppler.Document.TextHinting)
+
+qpageview.poppler.PopplerPage.renderer = FixedPopplerRenderer()
 
 ########################################################################
 # Utils
@@ -115,11 +130,15 @@ class PdfViewerApp(QApplication):
                 tex_file = sys.argv[4]
                 pdf_file = sys.argv[5]
                 synctex_mode = True
+                try:
+                    synctex_dir = sys.argv[6]
+                except:
+                    synctex_dir = None
         except:
             print("Error: wrong arguments")
             return
         if synctex_mode:
-            cls.run_synctex(line, col, tex_file, pdf_file)
+            cls.run_synctex(line, col, tex_file, pdf_file, synctex_dir)
         else:
             cls.run_viewer()
 
@@ -132,10 +151,10 @@ class PdfViewerApp(QApplication):
         app.exec()
 
     @classmethod
-    def run_synctex(cls, line, col, tex_file, pdf_file):
+    def run_synctex(cls, line, col, tex_file, pdf_file, synctex_dir):
         now = datetime.now()
         ts = datetime.timestamp(now)
-        msg = json.dumps([ts, line, col, tex_file, pdf_file])
+        msg = json.dumps([ts, line, col, tex_file, pdf_file, synctex_dir])
         dg = bytes(msg, cls.synctex_encoding)
         udp_socket = QUdpSocket()
         udp_socket.bind(QHostAddress(QHostAddress.AnyIPv4), 0)
@@ -161,13 +180,13 @@ class PdfViewerApp(QApplication):
 
     def fileOpenEvent(self, ev):
         file_path = ev.file()
-        print(ev, file_path)
         self.open_pdf(file_path)
 
     def open_pdf(self, file):
         file = Path(file).resolve()
         if file in self.viewers:
             viewer = self.viewers[file]
+            viewer.raise_()
             viewer.activateWindow()
         else:
             new_viewer = PdfViewer(self, file)
@@ -200,7 +219,7 @@ class PdfViewerApp(QApplication):
         dg, addr, ip = self.udp_socket.readDatagram(dg_size)
         msg = str(dg, self.synctex_encoding)
         try:
-            ts, line, col, tex_file, pdf_file = json.loads(msg)
+            ts, line, col, tex_file, pdf_file, synctex_dir = json.loads(msg)
         except:
             return
         if ts < self.synctex_ts:
@@ -208,7 +227,7 @@ class PdfViewerApp(QApplication):
         if Path(pdf_file).resolve() not in self.viewers:
             return
         self.synctex_ts = ts
-        self.synctex_queue.append(("view", line, col, tex_file, pdf_file))
+        self.synctex_queue.append(("view", line, col, tex_file, pdf_file, synctex_dir))
         self.proc_synctex_queue()
 
     def proc_synctex_queue(self):
@@ -218,11 +237,18 @@ class PdfViewerApp(QApplication):
             return
         self.synctex_mode, *args = self.synctex_queue.pop(0)
         if self.synctex_mode == "view":
-            line, col, tex_file, pdf_file = args
-            cmd = f"synctex view -i {line}:{col}:{tex_file} -o {pdf_file}"
+            line, col, tex_file, pdf_file, synctex_dir = args
+            if synctex_dir is not None:
+                self.synctex_handle_set_synctex_dir(pdf_file, synctex_dir)
+                cmd = f"synctex view -i {line}:{col}:{tex_file} -o {pdf_file} -d {synctex_dir}"
+            else:
+                cmd = f"synctex view -i {line}:{col}:{tex_file} -o {pdf_file}"
         elif self.synctex_mode == "edit":
-            page_num, x, y, pdf_file = args
-            cmd = f"synctex edit -o {page_num}:{x}:{y}:{pdf_file}"
+            page_num, x, y, pdf_file, synctex_dir = args
+            if synctex_dir is not None:
+                cmd = f"synctex edit -o {page_num}:{x}:{y}:{pdf_file} -d {synctex_dir}"
+            else:
+                cmd = f"synctex edit -o {page_num}:{x}:{y}:{pdf_file}"
         else:
             return
         self.synctex_proc = QProcess()
@@ -251,6 +277,16 @@ class PdfViewerApp(QApplication):
                 self.synctex_handle_finish_edit(data)
         self.synctex_proc = None
         self.proc_synctex_queue()
+
+    def synctex_handle_set_synctex_dir(self, pdf_file, synctex_dir):
+        try:
+            pdf_file = Path(pdf_file).resolve()
+        except:
+            return
+        if pdf_file not in self.viewers:
+            return
+        viewer = self.viewers[pdf_file]
+        viewer.synctex_dir = synctex_dir
 
     def synctex_handle_finish_view(self, data):
         try:
@@ -281,6 +317,33 @@ class PdfViewerApp(QApplication):
                 f.write(str(ts) + "\n" + str(line) + "\n")
 
 ########################################################################
+# MoviePlayer
+########################################################################
+
+class MoviePlayer(QLabel):
+
+    @classmethod
+    def make(cls, view, file, page_num=1):
+        obj = cls(view, file, page_num)
+        return obj.movie
+
+    def __init__(self, view, file, page_num=1):
+        QLabel.__init__(self)
+        # self.setStyleSheet('border: 1px solid red')
+        # self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.setScaledContents(True)
+        self.file = file
+        self.movie = QMovie(str(file))
+        self.setMovie(self.movie)
+        self.movie.setScaledSize(self.size())
+        view.addWidget(self, view.page(page_num))
+        self.movie.start()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.movie.setScaledSize(event.size())
+
+########################################################################
 # PdfViewer
 ########################################################################
 
@@ -288,6 +351,7 @@ class PdfViewer(
     qpageview.link.LinkViewMixin,
     qpageview.shadow.ShadowViewMixin,
     qpageview.highlight.HighlightViewMixin,
+    qpageview.widgetoverlay.WidgetOverlayViewMixin,
     qpageview.view.View
 ):
 
@@ -295,7 +359,10 @@ class PdfViewer(
         super().__init__()
         self.app = app
         self.file = Path(file).resolve()
-        self.position_history = []
+        self.posHist = []
+        self.posHistIdx = -1
+        self.synctex_dir = None
+        self.on_top = False
         self.init_window()
         #self.init_magnifier()
         self.init_rubberband()
@@ -304,37 +371,76 @@ class PdfViewer(
         self.show()
 
     def init_window(self):
-        self.setWindowFlags(
-            Qt.CustomizeWindowHint
-            #| Qt.WindowStaysOnTopHint
-        )
-        ag = self.app.desktop().availableGeometry()
-        self.resize(ag.width(), ag.height())
+        self.toggle_on_top(False, False)
+        self.resize_full()
         self.kineticScrollingEnabled = False
         self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
+
+    def toggle_on_top(self, on_top=None, show=True):
+        if on_top is None:
+            self.on_top = not self.on_top
+        else:
+            self.on_top = on_top
+        flags = Qt.CustomizeWindowHint
+        if self.on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        if show:
+            self.show()
+
+    def resize_full(self):
+        ag = self.app.desktop().availableGeometry()
+        self.move(0,0)
+        self.resize(ag.width(), ag.height())
+
+    def resize_half_left(self):
+        ag = self.app.desktop().availableGeometry()
+        self.move(0,0)
+        self.resize(ag.width()//2, ag.height())
+
+    def resize_half_right(self):
+        ag = self.app.desktop().availableGeometry()
+        self.move(ag.width()//2+1,0)
+        self.resize(ag.width()//2, ag.height())
 
     def init_magnifier(self):
         m = qpageview.magnifier.Magnifier()
         self.setMagnifier(m)
 
     def init_rubberband(self):
-        r = qpageview.rubberband.Rubberband()
-        self.setRubberband(r)
+        self.text_selector = qpageview.rubberband.Rubberband()
+        # FIXME: disabled for now, as it interfeers with other left mouse clicks.
+        # self.text_selector.showbutton = Qt.LeftButton
+        self.text_selector.selectionChanged.connect(self.selectionChangedEvent)
+        self.setRubberband(self.text_selector)
 
     def init_view(self):
         self.setViewMode(qpageview.FitWidth)
+        self.zoomOut(factor=1.1**2)
 
     def init_document(self):
         self._document_loaded = False
-        self.load_document_safe()
+        self.load_document()
         self.reloader_timer = QTimer()
         self.reloader_timer.timeout.connect(self.autoReloadEvent)
         self.reloader_timer.start(1000)
 
-    def load_document_safe(self):
-        with redirect_stderr() as err:
+    def load_document(self):
+        success = True
+        self.movie_player = None
+        if self.file.suffix == ".pdf":
+            # with redirect_stderr() as err:
+            #     self.loadPdf(str(self.file))
             self.loadPdf(str(self.file))
-        if self.document().document():
+            success = self.document().document()
+        elif self.file.suffix == ".svg":
+            self.loadSvgs([str(self.file)])
+        elif self.file.suffix == ".gif":
+            self.loadImages([str(self.file)])
+            self.movie_player = MoviePlayer.make(self, str(self.file))
+        else:
+            self.loadImages([str(self.file)])
+        if success:
             self._document_loaded = True
             self._document_load_error = None
             self._document_mtime = self.file.stat().st_mtime
@@ -351,7 +457,7 @@ class PdfViewer(
                     self.reload()
                     self._document_mtime = new_mtime
             else:
-                self.load_document_safe()
+                self.load_document()
         else:
             self._document_mtime = -1
             if self._document_loaded:
@@ -387,6 +493,10 @@ class PdfViewer(
                 margins = margins,
             )
 
+    def selectionChangedEvent(self, ev):
+        text = self.text_selector.selectedText()
+        self.app.clipboard().setText(text)
+
     def keyPressEvent(self, ev):
         key = ev.key()
         mod = ev.modifiers()
@@ -394,6 +504,20 @@ class PdfViewer(
             self.zoomIn()
         elif key == Qt.Key_Minus:
             self.zoomOut()
+        elif self.movie_player and key == Qt.Key_Space:
+            if self.movie_player.state() == QMovie.NotRunning:
+                self.movie_player.start()
+            elif self.movie_player.state() == QMovie.Running:
+                self.movie_player.setPaused(True)
+            elif self.movie_player.state() == QMovie.Paused:
+                self.movie_player.setPaused(False)
+        elif self.movie_player and key == Qt.Key_BracketLeft:
+            self.movie_player.jumpToFrame(0)
+        elif self.movie_player and key == Qt.Key_BracketRight:
+            last_frame = self.movie_player.frameCount() - 1
+            self.movie_player.jumpToFrame(last_frame)
+        elif self.movie_player and key == Qt.Key_Period:
+            pass
         elif key == Qt.Key_0:
             #self.setZoomFactor(1.0)
             self.setViewMode(qpageview.FitWidth)
@@ -403,11 +527,29 @@ class PdfViewer(
             self.setPageLayoutMode("double_right")
         elif key == Qt.Key_3:
             self.setPageLayoutMode("double_left")
+        elif key == Qt.Key_G:
+            self.goToPageDialog()
+        elif key == Qt.Key_BracketLeft:
+            self.goToPrevPos()
+        elif key == Qt.Key_BracketRight:
+            self.goToNextPos()
+        elif key == Qt.Key_M:
+            self.resize_full()
+        elif key == Qt.Key_Comma:
+            self.resize_half_left()
+        elif key == Qt.Key_Period:
+            self.resize_half_right()
+        elif key == Qt.Key_T:
+            self.toggle_on_top()
         # elif key == Qt.Key_Q and mod == Qt.ControlModifier:
         #     self.app.quit()
         elif key == Qt.Key_R:
             print("reload!")
             self.reload()
+        elif key == Qt.Key_P and mod == Qt.ControlModifier:
+            self.print()
+        elif key == Qt.Key_P:
+            self.openInPreview()
         elif key == Qt.Key_W and mod == Qt.ControlModifier:
             self.close()
         else:
@@ -419,12 +561,60 @@ class PdfViewer(
             return
         try:
             dest = link.linkobj.destination()
-            p = dest.pageNumber()
-            x = dest.left()
-            y = dest.top()
+            pos = qpageview.view.Position(
+                pageNumber = dest.pageNumber(),
+                x = dest.left(),
+                y = dest.top(),
+            )
         except:
             return
-        self.setPosition(qpageview.view.Position(p,x,y))
+        self.goToPos(pos)
+
+    def savePos(self):
+        curPos = self.position()
+        if not self.posHist:
+            self.posHistIdx = 0
+            self.posHist.append(curPos)
+        if self.posHist[self.posHistIdx] != curPos:
+            self.posHistIdx += 1
+            self.posHist[self.posHistIdx:] = [curPos]
+
+    def goToPos(self, pos):
+        self.savePos()
+        self.setPosition(pos)
+        self.savePos()
+
+    def goToNextPos(self):
+        if not self.posHist or self.posHistIdx >= len(self.posHist)-1:
+            return
+        self.posHistIdx += 1
+        self.setPosition(self.posHist[self.posHistIdx])
+
+    def goToPrevPos(self):
+        if not self.posHist or self.posHistIdx <= 0:
+            return
+        self.posHistIdx -= 1
+        self.setPosition(self.posHist[self.posHistIdx])
+
+    def goToPageDialog(self):
+        n0 = self.currentPageNumber()
+        n, ok = QInputDialog().getInt(
+            self,
+            "Go to page",
+            "Page number:",
+            value = n0,
+            min = 1,
+            max = self.pageCount(),
+            step = 1,
+            flags = Qt.Sheet,
+        )
+        if ok and n != n0:
+            self.savePos()
+            self.setCurrentPageNumber(n)
+            self.savePos()
+
+    def openInPreview(self):
+        subprocess.call(["open", "-a", "Preview", self.file])
 
     def mousePressEvent(self, ev):
         mod = ev.modifiers()
@@ -437,10 +627,13 @@ class PdfViewer(
                 page_num = page.ident() + 1
                 x = pos.x()
                 y = pos.y()
-                self.app.synctex_queue.append(("edit", page_num, x, y, str(self.file)))
+                self.app.synctex_queue.append(("edit", page_num, x, y, str(self.file), self.synctex_dir))
                 self.app.proc_synctex_queue()
                 return
         super().mousePressEvent(ev)
+
+    def closeEvent(self, ev):
+        del self.app.viewers[self.file]
 
 ########################################################################
 # main

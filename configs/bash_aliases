@@ -215,12 +215,13 @@ function _t_check_max_files() {
 
 function _t_traverse() {
     declare directory="$1"
+    declare dirname=${directory##*/}
     declare prefix="$2"
     declare level="$3"
     declare -a children
     declare child_count idx child nam pointer child_prefix
 
-    if [ "$level" -gt "$_t_max_level" ]; then
+    if [ \( "$level" -gt "$_t_max_level" \) -o \( "$dirname" = "node_modules" \) ]; then
         return
     fi
 
@@ -372,7 +373,7 @@ function _v_vim()
     if [[ $# = 1 && $1 =~ $re && $1 -le ${#_t_files[@]} ]] ; then
         command "$cmd" "${_t_files[$1]}"
     else
-        command "$cmd" "$@"
+        command "$cmd" -- "$@"
     fi
 }
 
@@ -418,9 +419,36 @@ function sudo() {
 }
 
 ###########################################################################
-# texdoc
+# view for pdf files
 ###########################################################################
 
+function _aviewer_view() {
+    if [ "$#" = 1 ]; then
+        file=$(basename -- "$1")
+        ext="${file##*.}"
+        case "$ext" in
+            pdf|svg|bmp|gif|jpg|jpeg|png|pbm|pgm|ppm|xbm|xpm|tiff)
+                open -a "$HOME/.dotfiles/apps/aViewer.app" "$1"
+                return
+                ;;
+        esac
+    fi
+    command view "$@"
+}
+
+if [ -e "$HOME/.bin_mac" -a -e "$HOME/.dotfiles/apps/aViewer.app" ]; then
+
+    alias view="_aviewer_view"
+
+else
+
+    unalias view 2>/dev/null
+
+fi
+
+###########################################################################
+# texdoc
+###########################################################################
 
 if [ -x "$(command -v texdoc)" ]; then
 
@@ -641,7 +669,7 @@ function cenv() {
                 if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
                     echo "Please change name in environment.yml"
                 elif [ "$ENV_NAME" ]; then
-                    echo "Creating environment \`$ENV_NAME\`."
+                    echo "Updating environment \`$ENV_NAME\`."
                     mamba env update --file "environment.yml" --prune
                 else
                     echo 'Could not determine environment from `environment.yml`.'
@@ -732,6 +760,36 @@ function penv() {
         | column -t -s= \
         | cut -c -$COLUMNS
 }
+
+########################################################################
+# 
+########################################################################
+
+function __dropbox_ignore() {
+    local CMD="$1"
+    local FILE="$2"
+    if [ ! "${FILE}" ]; then
+        CMD=usage
+    fi
+    case "$CMD" in
+        ignore)
+            xattr -w com.dropbox.ignored 1 "$FILE"
+            ;;
+        unignore)
+            xattr -d com.dropbox.ignored "$FILE"
+            ;;
+        *)
+		cat <<- USAGE
+		Usage:
+		    dropbox_ignore FILE  
+		    dropbox_unignore FILE  
+		USAGE
+            ;;
+    esac
+}
+
+alias dropbox_ignore='__dropbox_ignore ignore'
+alias dropbox_unignore='__dropbox_ignore unignore'
 
 ########################################################################
 # 
