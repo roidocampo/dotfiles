@@ -139,8 +139,8 @@ endfunction
 
 function! s:TexAuxCleanup()
     if b:use_synctex == 0
-        if filereadable(b:syntex_file)
-            call delete(b:syntex_file)
+        if filereadable(b:synctex_file)
+            call delete(b:synctex_file)
         endif
     endif
     call delete('.aux', 'd')

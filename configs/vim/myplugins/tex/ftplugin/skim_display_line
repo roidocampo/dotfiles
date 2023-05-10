@@ -16,8 +16,8 @@ fi
 # get arguments
 revert=false
 bar=false
-activate=true
-moveline=true
+activate=false
+moveline=false
 while [ "${1:0:1}" == "-" ]; do
   if [ "$1" == "-r" -o "$1" == "-revert" ]; then
     revert=true
@@ -58,5 +58,8 @@ shopt -s extglob
     if $moveline then
       tell front document to go to TeX line theLine from theSource showing reading bar $bar
     end if
+  end tell
+  tell application "iTerm2"
+    activate
   end tell
 EOF
