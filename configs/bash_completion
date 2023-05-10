@@ -1,7 +1,7 @@
 #!/bin/bash
 
 complete -o default -f -X '!*.tex' vi
-complete -o default -f -X '!*.tex' view
+complete -o default -f -X '!*.+(tex|pdf|pdfd|gif|png|jpg|jpeg|svg|bmp)' view
 complete -o default -f -X '!*.+(pdf|pdfd|app)' open
 complete -o default -f -X '!*.+(pdf|pdfd)' skim
 complete -o default -f -X '!*.+(pdf|pdfd)' acrobat

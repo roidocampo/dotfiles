@@ -16,6 +16,8 @@ function! MyManualFold()
   while 1
     if (sec_line == 0)
       break
+    elseif (sec_line == line('$'))
+      break
     else
       call setpos('.',[0,sec_line+1,1,0])
     endif

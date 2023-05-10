@@ -1,2 +1,2 @@
 syntax spell toplevel
-set spell
+setlocal spell
