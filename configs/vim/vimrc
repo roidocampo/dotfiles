@@ -40,10 +40,12 @@ endif
 set guioptions-=r                 "No scrollbar on gui
 set scrolloff=1                   "Show one line above/below cursor
 set sidescrolloff=5               "Show 5 colomuns left/right of cursor
+set fillchars=vert:│,fold:\       "Fill fold lines with spaces
+set list
+set listchars=tab:--›,nbsp:·
 "et number                        "Show line numbers
 "et signcolumn=number             "Show signs in number column
 "et foldcolumn=1                  "Show fold column
-set fillchars=vert:│,fold:\       "Fill fold lines with spaces
 "et fillchars=stl:─,stlnc:─,vert:│,fold:\              "Fill fold lines with spaces
 "et statusline=─
 "et laststatus=0
@@ -87,7 +89,8 @@ call plug#begin('~/.vim/bundle')
     Plug 'majutsushi/tagbar'
     Plug 'mbbill/undotree'
     Plug 'chrisbra/unicode.vim'
-    
+    Plug 'ntpeters/vim-better-whitespace'
+
     " Polyglot
     let g:polyglot_disabled = ['sensible', 'autoindent']
     Plug 'sheerun/vim-polyglot'
@@ -163,8 +166,8 @@ function! RoiStatusLine()
     endif
     let l:stl .= ' %h%w%m%r'
     let l:stl .= '%='
-    "et l:stl .= '%l,%c%V  %P ' 
-    let l:stl .= '%l/%L ' 
+    "et l:stl .= '%l,%c%V  %P '
+    let l:stl .= '%l/%L '
 
     return l:stl
 endfunction
@@ -190,7 +193,7 @@ if !empty($BASE16_THEME)
 endif
 
 hi LineNr ctermbg=NONE
-hi Folded ctermbg=NONE 
+hi Folded ctermbg=NONE
 hi SignColumn ctermbg=NONE
 hi FoldColumn ctermbg=NONE ctermfg=NONE
 hi VertSplit ctermbg=NONE ctermfg=18
