@@ -124,7 +124,7 @@ call plug#begin('~/.vim/bundle')
     Plug '~/.vim/myplugins/vert_help',    { 'for': 'help' }
     Plug '~/.vim/myplugins/singular',     { 'for': 'singular' }
     Plug '~/.vim/myplugins/inb',          { 'for': 'inb' }
-    Plug '~/.vim/myplugins/css_align',    { 'for': ['css', 'html', 'bib', 'php'] }
+    Plug '~/.vim/myplugins/css_align',    { 'for': ['css', 'html', 'bib', 'php', 'svelte'] }
     Plug '~/.vim/myplugins/php_fixspell', { 'for': 'php' }
     Plug '~/.vim/myplugins/md',           { 'for': 'markdown' }
 
@@ -316,6 +316,30 @@ autocmd FileType nerdtree setlocal statusline=\
 "########################################################################
 "########################################################################
 "##
+"## COMMENTSTRING
+"##
+"########################################################################
+"########################################################################
+
+autocmd FileType svelte setlocal commentstring=<!--\ %s\ -->
+autocmd FileType php setlocal commentstring=<!--\ %s\ -->
+
+" autoload
+let ___l = g:context#commentstring#table
+let g:context#commentstring#table['svelte'] = {
+            \ 'htmlSvelteTemplate'     : '<!--%s-->',
+            \ 'javascriptSvelteScript' : '//%s',
+            \ 'cssSvelteStyle'         : '/*%s*/',
+            \}
+let g:context#commentstring#table['php'] = {
+            \ 'javaScript' : '//%s',
+            \ 'cssStyle'   : '/*%s*/',
+            \ 'phpRegion'  : '#%s',
+            \}
+
+"########################################################################
+"########################################################################
+"##
 "## TMUX NAVIGATOR
 "##
 "########################################################################
@@ -327,6 +351,18 @@ nnoremap <silent> <Leader>j :TmuxNavigateDown<cr>
 nnoremap <silent> <Leader>k :TmuxNavigateUp<cr>
 nnoremap <silent> <Leader>l :TmuxNavigateRight<cr>
 nnoremap <silent> <c-\>     :TmuxNavigatePrevious<cr>
+
+"########################################################################
+"########################################################################
+"##
+"## HTML RELATED
+"##
+"########################################################################
+"########################################################################
+
+autocmd FileType {html,php,svelte} setlocal indentkeys-=<<>
+autocmd FileType {html,php,svelte} setlocal indentkeys-=<>>
+autocmd FileType {html,php,svelte} setlocal indentkeys-=/
 
 "########################################################################
 "########################################################################
@@ -359,4 +395,3 @@ let g:sh_no_error = 1    "also for bash
 let filetype_m = "mma"   "files with .m extension are Mathematica files
 let g:tex_flavor='latex'
 let g:cpp_class_scope_highlight = 1
-autocmd FileType php setlocal commentstring=#\ %s

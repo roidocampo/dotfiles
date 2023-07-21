@@ -38,6 +38,7 @@ fi
 prepend_to PATH "/Applications/DjView.app/Contents/bin/"
 prepend_to PATH "$HOME/opt/Macaulay2/bin"
 prepend_to PATH "$HOME/.cargo/bin"
+prepend_to PATH "$HOME/.bun/bin"
 prepend_to PATH "$HOME/.local/bin"
 prepend_to PATH "$HOME/.bin_mac"
 prepend_to PATH "$HOME/.bin_linux"
