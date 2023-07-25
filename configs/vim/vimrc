@@ -395,3 +395,4 @@ let g:sh_no_error = 1    "also for bash
 let filetype_m = "mma"   "files with .m extension are Mathematica files
 let g:tex_flavor='latex'
 let g:cpp_class_scope_highlight = 1
+let g:current_line_whitespace_disabled_soft=1
