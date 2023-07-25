@@ -46,7 +46,7 @@ qpageview.poppler.PopplerPage.renderer = FixedPopplerRenderer()
 # def stderr_redirector(stream):
 #     # The original fd stderr points to. Usually 2 on POSIX systems.
 #     original_stderr_fd = sys.stderr.fileno()
-# 
+#
 #     def _redirect_stderr(to_fd):
 #         """Redirect stderr to the given file descriptor."""
 #         # Flush the C-level buffer stderr
@@ -57,7 +57,7 @@ qpageview.poppler.PopplerPage.renderer = FixedPopplerRenderer()
 #         os.dup2(to_fd, original_stderr_fd)
 #         # Create a new sys.stderr that points to the redirected fd
 #         sys.stderr = io.TextIOWrapper(os.fdopen(original_stderr_fd, 'wb'))
-# 
+#
 #     # Save a copy of the original stderr fd in saved_stderr_fd
 #     saved_stderr_fd = os.dup(original_stderr_fd)
 #     try:
@@ -372,7 +372,7 @@ class PdfViewer(
 
     def init_window(self):
         self.toggle_on_top(False, False)
-        self.resize_full()
+        self.init_size()
         self.kineticScrollingEnabled = False
         self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
 
@@ -388,20 +388,74 @@ class PdfViewer(
         if show:
             self.show()
 
+    def init_size(self):
+        ag = self.app.desktop().availableGeometry()
+        if ag.height() > 1400:
+            self.size_state = [2, 1]
+            self.resize_to_right()
+        else:
+            self.size_state = [1, 0]
+            self.resize_full()
+
     def resize_full(self):
         ag = self.app.desktop().availableGeometry()
-        self.move(0,0)
+        self.move(ag.left(), ag.top())
         self.resize(ag.width(), ag.height())
+        self.size_state = [1, 0]
 
-    def resize_half_left(self):
+    def resize_to_left(self):
         ag = self.app.desktop().availableGeometry()
-        self.move(0,0)
-        self.resize(ag.width()//2, ag.height())
+        if self.size_state == [1, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(ag.width()//2, ag.height())
+            self.size_state = [2, 0]
+        elif self.size_state == [2, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(8*ag.width()//19, ag.height())
+            self.size_state = [2.375, 0]
+        elif self.size_state == [2, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [2, 0]
+        elif self.size_state == [2.375, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(ag.width()//3, ag.height())
+            self.size_state = [3, 0]
+        elif self.size_state == [2.375, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [2.375, 0]
+        elif self.size_state == [3, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [3, 0]
+        elif self.size_state == [3, 2]:
+            self.move(ag.left()+ag.width()//3+1, ag.top())
+            self.size_state = [3, 1]
 
-    def resize_half_right(self):
+    def resize_to_right(self):
         ag = self.app.desktop().availableGeometry()
-        self.move(ag.width()//2+1,0)
-        self.resize(ag.width()//2, ag.height())
+        if self.size_state == [1, 0]:
+            self.move(ag.left()+ag.width()//2+1,ag.top())
+            self.resize(ag.width()//2, ag.height())
+            self.size_state = [2, 1]
+        elif self.size_state == [2, 0]:
+            self.move(ag.left()+ag.width()//2+1,ag.top())
+            self.size_state = [2, 1]
+        elif self.size_state == [2, 1]:
+            self.move(ag.left()+11*ag.width()//19+1,ag.top())
+            self.resize(8*ag.width()//19, ag.height())
+            self.size_state = [2.375, 1]
+        elif self.size_state == [2.375, 0]:
+            self.move(ag.left()+11*ag.width()//19+1,ag.top())
+            self.size_state = [2.375, 1]
+        elif self.size_state == [2.375, 1]:
+            self.move(ag.left()+2*ag.width()//3+1,ag.top())
+            self.resize(ag.width()//3, ag.height())
+            self.size_state = [3, 2]
+        elif self.size_state == [3, 0]:
+            self.move(ag.left()+ag.width()//3+1,ag.top())
+            self.size_state = [3, 1]
+        elif self.size_state == [3, 1]:
+            self.move(ag.left()+2*ag.width()//3+1,ag.top())
+            self.size_state = [3, 2]
 
     def init_magnifier(self):
         m = qpageview.magnifier.Magnifier()
@@ -415,8 +469,13 @@ class PdfViewer(
         self.setRubberband(self.text_selector)
 
     def init_view(self):
-        self.setViewMode(qpageview.FitWidth)
-        self.zoomOut(factor=1.1**2)
+        if self.size_state == [1, 0]:
+            self.setViewMode(qpageview.FitWidth)
+            self.strictPagingEnabled = False
+            self.zoomOut(factor=1.1**2)
+        else:
+            self.setViewMode(qpageview.FitHeight)
+            self.strictPagingEnabled = True
 
     def init_document(self):
         self._document_loaded = False
@@ -485,7 +544,12 @@ class PdfViewer(
         except:
             pass
         else:
-            self.setPosition((page_num, x, y))
+            if self.strictPagingEnabled:
+                num = self.currentPageNumber()
+                if not ((page_num-1) <= num <= page_num):
+                    self.setCurrentPageNumber(page_num)
+            else:
+                self.setPosition((page_num, x, y))
             self.highlight(
                 { page: [area] },
                 msec = 10000,
@@ -501,8 +565,10 @@ class PdfViewer(
         key = ev.key()
         mod = ev.modifiers()
         if key == Qt.Key_Equal:
+            self.strictPagingEnabled = False
             self.zoomIn()
         elif key == Qt.Key_Minus:
+            self.strictPagingEnabled = False
             self.zoomOut()
         elif self.movie_player and key == Qt.Key_Space:
             if self.movie_player.state() == QMovie.NotRunning:
@@ -520,13 +586,35 @@ class PdfViewer(
             pass
         elif key == Qt.Key_0:
             #self.setZoomFactor(1.0)
-            self.setViewMode(qpageview.FitWidth)
+            if (
+                self.pageLayoutMode() != "single"
+                or (
+                    0.8
+                    <
+                    (11*self.width()/self.height()/8.5)
+                    <
+                    1.2
+                )
+            ):
+                self.setViewMode(qpageview.FitHeight)
+                self.strictPagingEnabled = True
+            else:
+                self.setViewMode(qpageview.FitWidth)
+                self.strictPagingEnabled = False
         elif key == Qt.Key_1:
             self.setPageLayoutMode("single")
         elif key == Qt.Key_2:
             self.setPageLayoutMode("double_right")
         elif key == Qt.Key_3:
             self.setPageLayoutMode("double_left")
+        elif self.pageLayoutMode() != "single" and key == Qt.Key_PageUp:
+            num = self.currentPageNumber()
+            if num > 2:
+                self.setCurrentPageNumber(num - 2)
+        elif self.pageLayoutMode() != "single" and key == Qt.Key_PageDown:
+            num = self.currentPageNumber()
+            if num < self.pageCount() - 1:
+                self.setCurrentPageNumber(num + 2)
         elif key == Qt.Key_G:
             self.goToPageDialog()
         elif key == Qt.Key_BracketLeft:
@@ -536,9 +624,9 @@ class PdfViewer(
         elif key == Qt.Key_M:
             self.resize_full()
         elif key == Qt.Key_Comma:
-            self.resize_half_left()
+            self.resize_to_left()
         elif key == Qt.Key_Period:
-            self.resize_half_right()
+            self.resize_to_right()
         elif key == Qt.Key_T:
             self.toggle_on_top()
         # elif key == Qt.Key_Q and mod == Qt.ControlModifier:
