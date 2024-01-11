@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+function st() {
+    tmux set -g "$@"
+}
+
+C_REGULAR_FG="colour21"
+C_REGULAR_BG="colour19"
+
+C_LIGHTER_FG="colour20"
+C_LIGHTER_BG="colour18"
+
+C_SPECIAL_FG="colour18"
+C_SPECIAL_BG="colour2"
+
+CR="#[fg=$C_REGULAR_FG bg=$C_REGULAR_BG]"
+CS="#[fg=$C_SPECIAL_FG bg=$C_SPECIAL_BG]"
+CL="#[fg=$C_LIGHTER_FG bg=$C_LIGHTER_BG]"
+CI="#[fg=$C_LIGHTER_BG bg=$C_LIGHTER_BG]"
+
+CRL="#[fg=$C_REGULAR_BG bg=$C_LIGHTER_BG nobold nounderscore noitalics]"
+CSR="#[fg=$C_SPECIAL_BG bg=$C_REGULAR_BG nobold nounderscore noitalics]"
+CRS="#[fg=$C_REGULAR_BG bg=$C_SPECIAL_BG nobold nounderscore noitalics]"
+CLS="#[fg=$C_LIGHTER_BG bg=$C_SPECIAL_BG nobold nounderscore noitalics]"
+CSL="#[fg=$C_SPECIAL_BG bg=$C_LIGHTER_BG nobold nounderscore noitalics]"
+
+SL=$'\356\202\260' # \uE0B0 
+AL=$'\356\202\261' # \uE0B1 
+SR=$'\356\202\262' # \uE0B2 
+AR=$'\356\202\263' # \uE0B2 
+
+if [ -z "$TMUX_HOSTNAME" ]; then
+    TMUX_HOSTNAME="$USER@$(hostname -s)"
+fi
+
+st pane-active-border-style "fg=$C_LIGHTER_BG"
+st pane-border-style "fg=$C_LIGHTER_BG"
+st pane-border-status 'off'
+
+# st pane-active-border-style "fg=$C_LIGHTER_BG,bg=$C_LIGHTER_BG"
+# st pane-border-style "fg=$C_LIGHTER_BG,bg=$C_LIGHTER_BG"
+# st pane-border-format "#[align=left]$CL #{pane_index}  #{pane_title} "
+# st pane-border-status 'top'
+
+# status line: left (clock)
+S=""
+S="$S#[align=left range=left]"
+S="$S$CR %H:%M "
+S="$S#[norange]"
+
+# status line: middle (window list)
+S="$S#[list=on align=left]"
+S="$S#[list=left-marker]<"
+S="$S#[list=right-marker]>"
+S="$S#[list=on]"
+S="$S$CRL"
+S="$S#{W:"
+    S="$S#[range=window|#{window_index}]"
+    S="$S$SL$CL"
+    S="$S #I#{?#{==:#{window_name},bash},,:#W} $CI"
+    S="$S#[norange]"
+S="$S,"
+    S="$S#[range=window|#{window_index} list=focus]"
+    S="$S#{?window_start_flag,$CRS,$CLS}$SL$CS"
+    S="$S #I#{?#{==:#{window_name},bash},,:#W} $CSL"
+    S="$S#[norange]"
+S="$S}"
+S="$S$SL"
+
+# status line: right (pane title, env, host)
+S="$S#[nolist align=right range=right]"
+S="$S$CRL$SR$CR #{pane_title} "
+S="$S$CSR$SR$CS #S "
+S="$S$CRS$SR$CR $TMUX_HOSTNAME "
+S="$S#[norange]"
+
+st status 'on'
+st status-style "fg=$C_LIGHTER_FG bg=$C_LIGHTER_BG"
+st status-format[0] "$S"

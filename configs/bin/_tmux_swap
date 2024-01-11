@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+case "$1" in
+    left)  TMUX_ARG="-L" ;;
+    right) TMUX_ARG="-R" ;;
+    up)    TMUX_ARG="-U" ;;
+    down)  TMUX_ARG="-D" ;;
+esac
+
+tmux select-pane -m
+tmux select-pane -Z "$TMUX_ARG"
+tmux swap-pane -dZ
+tmux select-pane -M

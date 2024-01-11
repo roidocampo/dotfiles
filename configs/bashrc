@@ -64,7 +64,9 @@ else
     export PS1='\[\033[00;${prompt_color}m\]${prompt}\[\033[00m\] '
 fi
 
-PREVIOUS_CONDA_ENV=${INITIAL_CONDA_ENV}
+if [ -z "${PREVIOUS_CONDA_ENV}" ]; then
+    PREVIOUS_CONDA_ENV=${INITIAL_CONDA_ENV}
+fi
 
 function cleanup_tmux_pid_files {
     (

@@ -588,17 +588,30 @@ function cenv() {
 
         init|-init)
 
-            if [ -f "environment.yml" ]; then
+            local ENV_FILE="environment.yml"
+            if [ -n "$2" ]; then
+                if [ "${2%.yml}" = "${2}" ]; then
+                    ENV_FILE=~/.dotfiles/envs/env-"$2".yml
+                else
+                    ENV_FILE="$2"
+                fi
+            fi
 
-                echo 'File `environment.yml` already exists. Doing nothing.'
+            if [ -f "${ENV_FILE}" ]; then
+
+                echo "File \`${ENV_FILE}\` already exists. Doing nothing."
+                return 1
 
             else
 
-		cat <<- YMLFILE > ./environment.yml
+		cat <<- YMLFILE > "${ENV_FILE}"
 		name: env-CHANGE-ME
 		channels:
 		  - conda-forge
 		  - default
+		platforms:
+		  - linux-64
+		  - osx-64
 		dependencies:
 		  # basic deps
 		  - autoconf
@@ -625,6 +638,7 @@ function cenv() {
 		  - make
 		  - nodejs
 		  - python
+		  - pip
 		  - requests
 		  - tar
 		  - tmux=3.1
@@ -641,91 +655,152 @@ function cenv() {
 		    - sjk
 		YMLFILE
 
-                echo 'File `environment.yml` created.'
+                echo "File \`${ENV_FILE}\` created."
 
             fi
 
             ;;
 
-        create|-create)
-            if [ -f "environment.yml" ]; then
-                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
-                if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
-                    echo "Please change name in environment.yml"
-                elif [ "$ENV_NAME" ]; then
-                    echo "Creating environment \`$ENV_NAME\`."
-                    mamba env create --file "environment.yml"
+        edit|-edit)
+            local ENV_FILE="environment.yml"
+            if [ -n "$2" ]; then
+                if [ -f "$2" ]; then
+                    ENV_FILE="$2"
                 else
-                    echo 'Could not determine environment from `environment.yml`.'
+                    ENV_FILE=~/.dotfiles/envs/env-"$2".yml
+                fi
+            fi
+            if [ -f "${ENV_FILE}" ]; then
+                "$EDITOR" "$ENV_FILE"
+            else
+                echo "File \`${ENV_FILE}\` does not exist. Run \`cenv init${2:+ }${2}\` first."
+                return 1
+            fi
+            ;;
+
+        create|-create)
+            local ENV_FILE="environment.yml"
+            if [ -n "$2" ]; then
+                if [ -f "$2" ]; then
+                    ENV_FILE="$2"
+                else
+                    ENV_FILE=~/.dotfiles/envs/env-"$2".yml
+                fi
+            fi
+            local LOCK_FILE="${ENV_FILE%.yml}.conda-lock.yml"
+            if [ -f "$ENV_FILE" ]; then
+                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' "$ENV_FILE")
+                if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
+                    echo "Please change name in $ENV_FILE"
+                    return 1
+                elif [ "$ENV_NAME" ]; then
+                    local CACHE_FILE="$HOME/.cenv-cache/$ENV_NAME.env"
+                    if [ -e "$CACHE_FILE" ]; then
+                        rm "$CACHE_FILE"
+                    fi
+                    if [ ! -f "$LOCK_FILE" ]; then
+                        cenv lock "$ENV_FILE" || return 4
+                    fi
+                    echo "Creating environment \`$ENV_NAME\`."
+                    # mamba env create --file "$ENV_FILE"
+                    mamba lock install --name "$ENV_NAME" "$LOCK_FILE"
+                else
+                    echo "Could not determine environment from \`$ENV_FILE\`."
+                    return 2
                 fi
             else
-                echo 'Could not find file `environment.yml`.'
+                echo "Could not find file \`$ENV_FILE\`."
+                return 3
+            fi
+            ;;
+
+        lock|-lock)
+            local ENV_FILE="environment.yml"
+            if [ -n "$2" ]; then
+                if [ -f "$2" ]; then
+                    ENV_FILE="$2"
+                else
+                    ENV_FILE=~/.dotfiles/envs/env-"$2".yml
+                fi
+            fi
+            local LOCK_FILE="${ENV_FILE%.yml}.conda-lock.yml"
+            if [ -f "$ENV_FILE" ]; then
+                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' "$ENV_FILE")
+                if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
+                    echo "Please change name in $ENV_FILE"
+                    return 1
+                elif [ "$ENV_NAME" ]; then
+                    echo "Creating lock for environment \`$ENV_NAME\`."
+                    mamba lock --file "$ENV_FILE" --lockfile "$LOCK_FILE"
+                else
+                    echo "Could not determine environment from \`$ENV_FILE\`."
+                    return 2
+                fi
+            else
+                echo "Could not find file \`$ENV_FILE\`."
+                return 3
             fi
             ;;
 
         update|-update)
-            if [ -f "environment.yml" ]; then
-                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
-                if [ "$ENV_NAME" = "env-CHANGE-ME" ]; then
-                    echo "Please change name in environment.yml"
-                elif [ "$ENV_NAME" ]; then
-                    echo "Updating environment \`$ENV_NAME\`."
-                    mamba env update --file "environment.yml" --prune
-                else
-                    echo 'Could not determine environment from `environment.yml`.'
-                fi
-            else
-                echo 'Could not find file `environment.yml`.'
-            fi
+            shift
+            cenv lock "$@" && cenv create "$@"
             ;;
 
         remove|-remove)
-            if [ -f "environment.yml" ]; then
-                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+            local ENV_FILE="environment.yml"
+            if [ -n "$2" ]; then
+                if [ -f "$2" ]; then
+                    ENV_FILE="$2"
+                else
+                    ENV_FILE=~/.dotfiles/envs/env-"$2".yml
+                fi
+            fi
+            if [ -f "$ENV_FILE" ]; then
+                local ENV_NAME=$(sed -E -n -e '1s/name: (.*)/\1/p' "$ENV_FILE")
                 if [ "$ENV_NAME" ]; then
                     echo "Removing environment \`$ENV_NAME\`."
+                    local CACHE_FILE="$HOME/.cenv-cache/$ENV_NAME.env"
+                    if [ -e "$CACHE_FILE" ]; then
+                        rm "$CACHE_FILE"
+                    fi
                     mamba env remove --name "$ENV_NAME"
                 else
-                    echo 'Could not determine environment from `environment.yml`.'
+                    echo "Could not determine environment from \`$ENV_FILE\`."
+                    return 1
                 fi
             else
-                echo 'Could not find file `environment.yml`.'
+                echo "Could not find file \`$ENV_FILE\`."
+                return 2
             fi
             ;;
 
         deactivate|-deactivate)
-            echo 'Deactivating current environment.'
-            conda deactivate
+            if [ "$CONDA_DEFAULT_ENV" = "$INITIAL_CONDA_ENV" ]; then
+                echo 'Already in initial conda environment. Will not deactivate.'
+                echo 'Note: run `conda deactivate` to force deactivation.'
+            else
+                echo 'Deactivating current environment.'
+                conda deactivate
+            fi
             ;;
 
-        usage|-usage|help|-help|-*)
-
-		cat <<- USAGE
-		Usage:
-		    cenv              (activate environment using ./environment.yml)
-		    cenv ENV-NAME     (activate environment ENV-NAME)
-		    cenv deactivate   (deactivate current environment)
-		    cenv init         (create template ./environment.yml)
-		    cenv create       (create environment using ./environment.yml)
-		    cenv update       (update environment using ./environment.yml)
-		    cenv remove       (remove environment using ./environment.yml)
-		    cenv usage        (show this help)
-		
-		Aliases:
-		    act          = cenv
-		    activate     = cenv
-		    deact        = cenv deactivate
-		    deactivate   = cenv deactivate
-		USAGE
+        list|-list)
+            local ENV
+            for ENV in "$CONDA_BASE"/envs/*; do
+                echo "${ENV##*/}"@"$ENV"
+            done \
+                | column -t -s@ \
+                | cut -c -$COLUMNS
             ;;
 
-        *)
+        activate|-activate)
             local REQ_ENV
-            if [ "$1" ]; then
-                if [ "x$1" = "xenv0" ]; then
-                    REQ_ENV=env0
+            if [ -n "$2" ]; then
+                if [ "${2:0:3}" = "env" ]; then
+                    REQ_ENV="$2"
                 else
-                    REQ_ENV=env-"$1"
+                    REQ_ENV=env-"$2"
                 fi
             elif [ -f "environment.yml" ]; then
                 REQ_ENV=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
@@ -738,16 +813,151 @@ function cenv() {
                     conda activate "$REQ_ENV"
                 fi
             else
+                echo "Please indicate which environment to activate (could not guess from \`environment.yml\`)."
                 cenv usage
+                return 1
             fi
+            ;;
+
+        cache|-cache)
+            local REQ_ENV
+            if [ -n "$2" ]; then
+                if [ "${2:0:3}" = "env" ]; then
+                    REQ_ENV="$2"
+                else
+                    REQ_ENV=env-"$2"
+                fi
+            elif [ -f "environment.yml" ]; then
+                REQ_ENV=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+            fi
+            if [ "$REQ_ENV" ]; then
+                echo "Creating cache of environment \`$REQ_ENV\`."
+                mkdir -p "$HOME"/.cenv-cache
+                env -i \
+                    HOME="$HOME" \
+                    USER="$USER" \
+                    _BASH_PROFILE_NOECHO=noecho \
+                    TMUX=fake \
+                    "$BASH" -l -i -c "\
+                        conda activate '$REQ_ENV' && \
+                        env > '$HOME'/.cenv-cache/'$REQ_ENV'.env ;\
+                    "
+            else
+                cenv usage
+                return 1
+            fi
+            ;;
+
+        fast|-fast)
+            shift
+            cenv fast-"$@"
+            ;;
+
+        fast-activate|-fast-activate|-fast--activate)
+            local REQ_ENV
+            if [ -n "$2" ]; then
+                if [ "${2:0:3}" = "env" ]; then
+                    REQ_ENV="$2"
+                else
+                    REQ_ENV=env-"$2"
+                fi
+            elif [ -f "environment.yml" ]; then
+                REQ_ENV=$(sed -E -n -e '1s/name: (.*)/\1/p' environment.yml)
+            fi
+            if [ "$REQ_ENV" ]; then
+                if [ "$REQ_ENV" = "$CONDA_DEFAULT_ENV" ]; then
+                    echo "Environment \`$REQ_ENV\` already active."
+                else
+                    local CACHE_FILE="$HOME/.cenv-cache/$REQ_ENV.env"
+                    if [ ! -f "$CACHE_FILE" ]; then
+                        cenv cache "$REQ_ENV"
+                    fi
+                    if [ -f "$CACHE_FILE" ]; then
+                        if [ "$REQ_ENV" = "$INITIAL_CONDA_ENV" ]; then
+                            echo "Rectivating inital environment \`$REQ_ENV\` (fast activation mode)."
+                        else
+                            echo "Activating environment \`$REQ_ENV\` (fast activation mode)."
+                        fi
+                        local -a ENV_ARGS
+                        local ENV_LINE
+                        local -a ENV_LINES
+                        local V
+                        readarray ENV_LINES < "$CACHE_FILE"
+                        for ENV_LINE in "${ENV_LINES[@]}"; do
+                            if ! [[ $ENV_LINE == TMUX* ]]; then
+                                ENV_ARGS+=("${ENV_LINE%$'\n'}")
+                            fi
+                        done
+                        for V in \
+                                "${!TERM@}" \
+                                "${!ITERM@}" \
+                                "${!LANG@}" \
+                                "${!TMUX@}" \
+                                "${!BASE@}" \
+                                "${!XPC@}" \
+                                "${!PWD@}" \
+                                "${!INITIAL_CONDA_ENV@}" \
+                        ; do
+                            ENV_ARGS+=("$V=${!V}")
+                        done
+                        exec env -i \
+                            "${ENV_ARGS[@]}" \
+                            CENV_IN_FAST_ENV=yes \
+                            PREVIOUS_CONDA_ENV="${CONDA_DEFAULT_ENV}" \
+                            bash
+                    else
+                        echo "Error: Could not activate environment \`$REQ_ENV\`."
+                        return 1
+                    fi
+                fi
+            else
+                echo "Please indicate which environment to activate (could guess from \`$ENV_FILE\`)."
+                cenv usage
+                return 2
+            fi
+            ;;
+
+        fast-deactivate|-fast-deactivate|-fast--deactivate)
+            if [ "$CONDA_DEFAULT_ENV" = "$INITIAL_CONDA_ENV" ]; then
+                echo 'Already in initial conda environment. Will not deactivate.'
+                echo 'Note: run `conda deactivate` to force deactivation.'
+            elif [ -n "$CENV_IN_FAST_ENV" ]; then
+                cenv fast-activate env0
+            else
+                cenv deactivate
+            fi
+            ;;
+
+        *)
+
+		cat <<- USAGE
+		Usage:
+		    cenv activate            (activate environment using ./environment.yml)
+		    cenv activate ENV-NAME   (activate environment ENV-NAME)
+		    cenv deactivate          (deactivate current environment)
+		    cenv fast CMD ENV-NAME   (fast (de)activate environment ENV-NAME)
+		    cenv cache ENV-NAME      (chache environment ENV-NAME)
+		    cenv init                (create template ./environment.yml)
+		    cenv create [ENV-NAME]   (create environment using ./environment.yml or ENV-NAME)
+		    cenv update [ENV-NAME]   (update environment using ./environment.yml or ENV-NAME)
+		    cenv remove [ENV-NAME]   (remove environment using ./environment.yml or ENV-NAME)
+		    cenv list                (list created environments)
+		    cenv usage               (show this help)
+		
+		Aliases:
+		    act          = cenv fast activate
+		    activate     = cenv activate
+		    deact        = cenv fast deactivate
+		    deactivate   = cenv deactivate
+		USAGE
             ;;
 
     esac
 }
 
-alias act='cenv'
-alias activate='cenv'
-alias deact='cenv deactivate'
+alias act='cenv fast activate'
+alias activate='cenv activate'
+alias deact='cenv fast deactivate'
 alias deactivate='cenv deactivate'
 
 ########################################################################

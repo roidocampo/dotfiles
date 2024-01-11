@@ -45,7 +45,7 @@ class SkimHelper(object):
 
     """
     self.maybe_update_position()
-    vim.command('call feedkeys("f\e")')
+    vim.command('call feedkeys("f\\e")')
 
   def get_buffer_file(self):
     """Get the file of the buffer associated to self.

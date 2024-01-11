@@ -436,7 +436,8 @@ setup_conda() {
     box_row 1 33 "*" "Configuring base environment"
     box_end
 
-    mamba install --name base conda-build #mamba
+    #mamba install --name base conda-build #mamba
+    mamba install --channel=conda-forge --name=base conda-build conda-lock
 
     printf '\n'
 

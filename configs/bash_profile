@@ -2,7 +2,7 @@
 #
 ########################################################################
 
-if [ -n "${JUPYTER_SERVER_ROOT}" ]; then
+if [ -n "${JUPYTER_SERVER_ROOT}" -o -n "$_BASH_PROFILE_NOECHO" ]; then
     ECO=""
 elif [ -n "$PS1" -o -n "$_BASH_PROFILE_ECHO" ]; then
     ECO=yes
@@ -105,6 +105,7 @@ fi
 [ -n "$ECO" -a ! "$_BASH_PROFILE_ECHO" ] && echo
 
 unset _BASH_PROFILE_ECHO
+unset _BASH_PROFILE_NOECHO
 unset ECO
 unset -f prepend_to
 unset -f set_conda_base
@@ -114,3 +115,19 @@ unset -f set_conda_base
 ########################################################################
 
 # vi: ft=bash
+
+# # >>> conda initialize >>>
+# # !! Contents within this block are managed by 'conda init' !!
+# __conda_setup="$('/Users/roi/opt/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+# if [ $? -eq 0 ]; then
+#     eval "$__conda_setup"
+# else
+#     if [ -f "/Users/roi/opt/miniconda3/etc/profile.d/conda.sh" ]; then
+#         . "/Users/roi/opt/miniconda3/etc/profile.d/conda.sh"
+#     else
+#         export PATH="/Users/roi/opt/miniconda3/bin:$PATH"
+#     fi
+# fi
+# unset __conda_setup
+# # <<< conda initialize <<<
+

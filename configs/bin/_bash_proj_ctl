@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+function usage() {
+    : zzzz "print this usage message"
+    echo "Usage:"
+    echo
+    echo -e "  \033[00;32m$0\033[00m <command> [<args>]"
+    echo
+    echo "Available commands:"
+    echo
+    local cmd
+    local cmd_desc
+    local cmd_num
+    local -A cmd_map
+    local -A cmd_desc_map
+    local -a cmd_keys
+    for cmd in $(compgen -A function); do
+        [ "${cmd}" = "error" ] && continue
+        cmd_desc="$(type -a "${cmd}")"
+        cmd_num="${cmd_desc#*:}"
+        cmd_num="${cmd_num%%;*}"
+        cmd_num="${cmd_num%%\"*}"
+        cmd_num="${cmd_num%%${cmd} is*}"
+        cmd_num="${cmd_num// /}"
+        if [ -z "${cmd_num}" ]; then
+            cmd_num="${cmd}"
+        fi
+        cmd_desc="${cmd_desc#*:*\"}"
+        cmd_desc="${cmd_desc%%\"*}"
+        cmd_desc="${cmd_desc%%${cmd} is*}"
+        if ! [[ "${cmd_desc}" == *"@"* ]]; then
+            cmd_desc=" @ ${cmd_desc}"
+        fi
+        cmd_map["${cmd_num}"]="${cmd}"
+        cmd_desc_map["${cmd_num}"]="${cmd_desc}"
+    done
+    readarray -t cmd_keys < <(printf '%s\n' "${!cmd_map[@]}" | sort)
+    for cmd_num in "${cmd_keys[@]}"; do
+        cmd="${cmd_map["${cmd_num}"]}"
+        cmd_desc="${cmd_desc_map["${cmd_num}"]}"
+        echo -e "  \033[00;34m${cmd}\033[00m ${cmd_desc}"
+    done \
+        | column -t -s@ \
+        | cut -c -"$(tput cols)"
+    echo
+}
+
+function error() {
+    echo "Error: $1"
+    usage
+    exit 1
+}
+
+CMD="$1"
+CMD_TYPE="$(type -t "$CMD")"
+if [ "${CMD_TYPE}" = "function" ]; then
+    shift
+    "$CMD" "$@"
+elif [ -n "$CMD" ]; then
+    error "\`$CMD\` is not a recognized command."
+else
+    usage
+fi

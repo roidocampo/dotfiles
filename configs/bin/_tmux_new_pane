@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+function in_vim() {
+    ps -o state= -o comm= -t "$(tmux display-message -p '#{pane_tty}')" |\
+        grep -iqE '^[^TXZ ]+ +(\\S+\\/)?g?(view|l?n?vim?x?)(diff)?$'
+}
+
+[ "x$1" = "xhorizontal"   ] && SPLIT_ARG="-h"
+[ "x$2" = "xbefore"       ] && DIRECTION_ARG="-b"
+[ "x$3" = "xcheck_vim"    ] && CHECK_VIM="yes"
+[ "x$3" = "xinherit_env"  ] && INHERIT_ENV="yes"
+
+if [ "$CHECK_VIM" ]
+then
+    if in_vim
+    then
+        if [ "$SPLIT_ARG" ]; then
+            tmux send-keys C-w v C-w l
+        else
+            tmux send-keys C-w s C-w j
+        fi
+        exit
+    fi
+fi
+
+if [ "$INHERIT_ENV" ]
+then
+    PARENT_PANE_PID=`tmux display -p '#{pane_pid}'`
+    PARENT_PANE_PWD=`tmux display -p '#{pane_current_path}'`
+    tmux split-window \
+        $SPLIT_ARG $DIRECTION_ARG -c "$PARENT_PANE_PWD" \
+        "_tmux_duplicate_env $PARENT_PANE_PID"
+    exit
+fi
+
+tmux split-window $SPLIT_ARG $DIRECTION_ARG -c '#{pane_current_path}'

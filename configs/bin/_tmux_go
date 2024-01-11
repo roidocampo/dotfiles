@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+function in_vim() {
+    ps -o state= -o comm= -t "$(tmux display-message -p '#{pane_tty}')" |\
+        grep -iqE '^[^TXZ ]+ +(\\S+\\/)?g?(view|l?n?vim?x?)(diff)?$'
+}
+
+case "$1" in
+    left)
+        TMUX_ARG="-L"
+        VIM_KEYS="h"
+        ;;
+    right)
+        TMUX_ARG="-R"
+        VIM_KEYS="l"
+        ;;
+    up)
+        TMUX_ARG="-U"
+        VIM_KEYS="k"
+        ;;
+    down)
+        TMUX_ARG="-D"
+        VIM_KEYS="j"
+        ;;
+esac
+
+if in_vim
+then
+    tmux send-keys Escape \\ $VIM_KEYS
+else
+    tmux select-pane "$TMUX_ARG"
+fi

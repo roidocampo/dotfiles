@@ -1,0 +1,9 @@
+name: env-sage3
+channels:
+  - conda-forge
+  - default
+platforms:
+  - linux-64
+  - osx-64
+dependencies:
+  - sage
