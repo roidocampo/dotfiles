@@ -756,9 +756,9 @@ class PdfViewer(
             if self.strictPagingEnabled:
                 num = self.currentPageNumber()
                 if not ((page_num-1) <= num <= page_num):
-                    self.setCurrentPageNumber(page_num)
+                    self.goToPageAux(page_num)
             else:
-                self.setPosition((page_num, x, y))
+                self.setPosition((page_num, 0.5, y))
             self.highlight(
                 { page: [area] },
                 msec = 10000,
@@ -989,8 +989,15 @@ class PdfViewer(
         )
         if ok and n != n0:
             self.savePos()
-            self.setCurrentPageNumber(n)
+            self.goToPageAux(n)
             self.savePos()
+
+    def goToPageAux(self, n):
+        self.setCurrentPageNumber(n)
+        pos = self.position()
+        self.setPosition(qpageview.view.Position(
+            pos.pageNumber, 0.5, pos.y
+        ))
 
     def openInPreview(self):
         subprocess.call(["open", "-a", "Preview", self.file])
