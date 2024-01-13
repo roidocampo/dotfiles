@@ -24,7 +24,34 @@ from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 
+########################################################################
+# FixedPopplerRenderer
+########################################################################
+
+_old_createPages = qpageview.poppler.PopplerDocument.createPages
+
+def _new_createPages(self):
+    pages = _old_createPages(self)
+    if not pages:
+        return ()
+    for page in pages:
+        page._qpdoc = self
+        yield page
+
+qpageview.poppler.PopplerDocument.createPages = _new_createPages
+
+class ProxyPainter:
+    def __init__(self, painter):
+        self.painter = painter
+    def device(self, *args, **kws):
+        return self.painter.device()
+    def fillRect(self, *args, **kws):
+        pass
+    def drawImage(self, *args, **kws):
+        pass
+
 class FixedPopplerRenderer(qpageview.poppler.PopplerRenderer):
+
     def setRenderHints(self, doc):
         """Set the poppler render hints we want to set."""
         import popplerqt5
@@ -32,6 +59,23 @@ class FixedPopplerRenderer(qpageview.poppler.PopplerRenderer):
             doc.setRenderHint(popplerqt5.Poppler.Document.Antialiasing)
             doc.setRenderHint(popplerqt5.Poppler.Document.TextAntialiasing)
             # doc.setRenderHint(popplerqt5.Poppler.Document.TextHinting)
+
+    # def schedule(self, page, *args, **kws):
+    #     print(page.pageNumber, flush=True)
+    #     return super().schedule(page, *args, **kws)
+
+    def paint(self, page, painter, rect, callback=None):
+        page_num = page.pageNumber
+        doc = page._qpdoc
+        pages = doc.pages()
+        cb = lambda *args, **kws: None
+        for offset in [1, -1, 2, -2]:
+            idx = page_num + offset
+            if 0 <= idx < len(pages):
+                neigh_page = pages[idx]
+                super().paint(neigh_page, ProxyPainter(painter), rect, cb)
+        super().paint(page, painter, rect, callback)
+
 
 qpageview.poppler.PopplerPage.renderer = FixedPopplerRenderer()
 
@@ -167,6 +211,7 @@ class PdfViewerApp(QApplication):
     def __init__(self):
         super().__init__(sys.argv)
         self.viewers = {}
+        # self.documents = {}
         self.init_synctex_server()
         for file in sys.argv[1:]:
             self.open_pdf(file)
@@ -225,7 +270,7 @@ class PdfViewerApp(QApplication):
         if ts < self.synctex_ts:
             return
         if Path(pdf_file).resolve() not in self.viewers:
-            return
+            self.open_pdf(pdf_file)
         self.synctex_ts = ts
         self.synctex_queue.append(("view", line, col, tex_file, pdf_file, synctex_dir))
         self.proc_synctex_queue()
@@ -355,26 +400,143 @@ class PdfViewer(
     qpageview.view.View
 ):
 
-    def __init__(self, app, file):
+    def __init__(self, app, file=None, key=None, old_viewer=None):
         super().__init__()
         self.app = app
-        self.file = Path(file).resolve()
-        self.posHist = []
-        self.posHistIdx = -1
-        self.synctex_dir = None
-        self.on_top = False
+        if file is not None:
+            self.file = Path(file).resolve()
+            self.gen_key()
+            self.siblings = [ self.key ]
+            for v in self.app.viewers.items():
+                if v.file == self.file:
+                    sibs = [ s for s in v.siblings ]
+                    for skey in sibs:
+                        if skey in self.app.viewers:
+                            self.app.viewers[skey].siblings.insert(0, self.key)
+                    self.siblings += sibs
+                    break
+            self.posHist = []
+            self.posHistIdx = -1
+            self.synctex_dir = None
+            self.hscroll_lock = True
+            self.on_top = False
+        elif old_viewer is not None:
+            old_props = qpageview.view.ViewProperties()
+            old_props.get(old_viewer)
+            self.file = old_viewer.file
+            self.gen_key()
+            sibs = [ s for s in old_viewer.siblings ]
+            idx = sibs.index(old_viewer.key)+1
+            for skey in sibs:
+                if skey in self.app.viewers:
+                    self.app.viewers[skey].siblings.insert(idx, self.key)
+            self.siblings = [ s for s in old_viewer.siblings ]
+            self.posHist = old_viewer.posHist
+            self.posHistIdx = old_viewer.posHistIdx
+            self.synctex_dir = old_viewer.synctex_dir
+            self.hscroll_lock = old_viewer.hscroll_lock
+            self.on_top = old_viewer.on_top
+        else:
+            return
         self.init_window()
+        self.init_menu()
+        self.init_tab_bar()
         #self.init_magnifier()
         self.init_rubberband()
         self.init_view()
         self.init_document()
+        if old_viewer is not None:
+            self.setGeometry(old_viewer.geometry())
+            self.size_state = old_viewer.size_state
         self.show()
+        if old_viewer is not None:
+            old_props.set(self)
+            # self.setPosition(old_props.position)
+
+    def duplicate(self, show=True):
+        new_viewer = PdfViewer(self.app, old_viewer=self)
+        self.app.viewers[new_viewer.key] = new_viewer
+        for skey in self.siblings:
+            if skey != new_viewer.key:
+                if skey in self.app.viewers:
+                    self.app.viewers[skey].update_tab_bar()
+
+    def gen_key(self):
+        key = self.file
+        i = 0
+        while key in self.app.viewers:
+            i += 1
+            key = f"{self.file}_@_{i}"
+        self.key = key
 
     def init_window(self):
-        self.toggle_on_top(False, False)
+        self.toggle_on_top(self.on_top, False)
         self.init_size()
         self.kineticScrollingEnabled = False
         self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
+
+    def init_menu(self):
+        self.menu_bar = QMenuBar(self)
+        self.toc_menu = self.menu_bar.addMenu(self.file.name)
+        self.currentPageNumberChanged.connect(self.update_menu_title)
+        self.pageCountChanged.connect(self.update_menu_title)
+
+    def update_menu_title(self):
+        self.toc_menu.setTitle(
+            f"{self.file.name} ({self.currentPageNumber()}/{self.pageCount()})"
+        )
+
+    def init_tab_bar(self):
+        self.tab_bar = None
+        if len(self.siblings) <= 1:
+            return
+        self.tab_bar = QWidget(self)
+        tab_bar_layout = QVBoxLayout()
+        tab_bar_layout.setContentsMargins(4,4,0,0)
+        tab_bar_layout.setSpacing(4);
+        for i, skey in enumerate(self.siblings):
+            button = QPushButton(f"{i+1}")
+            button.setFixedWidth(30)
+            if self.key == skey:
+                button.setStyleSheet("""
+                    padding: 3px;
+                    color: white;
+                    background-color: #2B384D;
+                    border: 1px solid black;
+                    border-radius: 4px;
+                """)
+            else:
+                button.setStyleSheet("""
+                    padding: 3px;
+                    color: black;
+                    background-color: #A8B9CA;
+                    border: 1px solid black;
+                    border-radius: 4px;
+                """)
+                button.clicked.connect(lambda state, j=i: self.raise_sibling(j))
+            tab_bar_layout.addWidget(button)
+        self.tab_bar.setLayout(tab_bar_layout)
+        self.tab_bar.show()
+
+    def update_tab_bar(self):
+        self.siblings = [
+            s
+            for s in self.siblings
+            if s in self.app.viewers
+        ]
+        if self.tab_bar is not None:
+            self.tab_bar.setParent(None)
+            self.tab_bar = None
+        self.init_tab_bar()
+
+    def raise_sibling(self, i):
+        try:
+            skey = self.siblings[i]
+            viewer = self.app.viewers[skey]
+        except:
+            return
+        viewer.raise_()
+        viewer.activateWindow()
 
     def toggle_on_top(self, on_top=None, show=True):
         if on_top is None:
@@ -429,6 +591,10 @@ class PdfViewer(
         elif self.size_state == [3, 2]:
             self.move(ag.left()+ag.width()//3+1, ag.top())
             self.size_state = [3, 1]
+        pos = self.position()
+        self.setPosition(qpageview.view.Position(
+            pos.pageNumber, 0.5, pos.y
+        ))
 
     def resize_to_right(self):
         ag = self.app.desktop().availableGeometry()
@@ -456,6 +622,10 @@ class PdfViewer(
         elif self.size_state == [3, 1]:
             self.move(ag.left()+2*ag.width()//3+1,ag.top())
             self.size_state = [3, 2]
+        pos = self.position()
+        self.setPosition(qpageview.view.Position(
+            pos.pageNumber, 0.5, pos.y
+        ))
 
     def init_magnifier(self):
         m = qpageview.magnifier.Magnifier()
@@ -476,6 +646,7 @@ class PdfViewer(
         else:
             self.setViewMode(qpageview.FitHeight)
             self.strictPagingEnabled = True
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     def init_document(self):
         self._document_loaded = False
@@ -488,8 +659,12 @@ class PdfViewer(
         success = True
         self.movie_player = None
         if self.file.suffix == ".pdf":
-            # with redirect_stderr() as err:
+            # if self.file in self.app.documents:
+            #     doc = self.app.documents[self.file]
+            #     self.setDocument(doc)
+            # else:
             #     self.loadPdf(str(self.file))
+            #     self.app.documents[self.file] = self.document()
             self.loadPdf(str(self.file))
             success = self.document().document()
         elif self.file.suffix == ".svg":
@@ -503,6 +678,7 @@ class PdfViewer(
             self._document_loaded = True
             self._document_load_error = None
             self._document_mtime = self.file.stat().st_mtime
+            self.populate_toc_menu()
         else:
             self._document_loaded = False
             self._document_load_error = err.getvalue()
@@ -514,6 +690,7 @@ class PdfViewer(
                 new_mtime = self.file.stat().st_mtime
                 if new_mtime > self._document_mtime:
                     self.reload()
+                    self.populate_toc_menu()
                     self._document_mtime = new_mtime
             else:
                 self.load_document()
@@ -523,6 +700,38 @@ class PdfViewer(
                 self.clear()
                 self._document_loaded = False
                 self._document_load_error = None
+
+    def populate_toc_menu(self):
+        self.toc_menu.clear()
+        def add_toc_action(text, page_num=0, x=0, y=0):
+            pos = qpageview.view.Position(pageNumber = page_num, x = x, y = y)
+            act = self.toc_menu.addAction(text)
+            act.triggered.connect(lambda state, p=pos: self.goToPos(p))
+        if self.file.suffix != ".pdf":
+            add_toc_action("Image file")
+            return
+        add_toc_action("Table of contents")
+        doc = self.document().document()
+        if not doc:
+            return
+        toc = doc.toc()
+        if not toc:
+            return
+        toc_item = doc.toc().firstChild()
+        while not toc_item.isNull():
+            toc_el = toc_item.toElement()
+            toc_text = toc_el.tagName()
+            toc_dest = toc_el.attribute("DestinationName")
+            if not toc_dest:
+                continue
+            toc_dest = doc.linkDestination(toc_dest)
+            add_toc_action(
+                toc_text,
+                page_num = toc_dest.pageNumber(),
+                x = toc_dest.left(),
+                y = toc_dest.top(),
+            )
+            toc_item = toc_item.nextSibling()
 
     def handle_synctex_goto(self, data):
         try:
@@ -570,6 +779,9 @@ class PdfViewer(
         elif key == Qt.Key_Minus:
             self.strictPagingEnabled = False
             self.zoomOut()
+        elif mod == Qt.ControlModifier and (Qt.Key_1 <= key <= Qt.Key_9):
+            idx = key - Qt.Key_1
+            self.raise_sibling(idx)
         elif self.movie_player and key == Qt.Key_Space:
             if self.movie_player.state() == QMovie.NotRunning:
                 self.movie_player.start()
@@ -615,6 +827,28 @@ class PdfViewer(
             num = self.currentPageNumber()
             if num < self.pageCount() - 1:
                 self.setCurrentPageNumber(num + 2)
+        elif key == Qt.Key_S:
+            if self.continuousMode():
+                self.setContinuousMode(False)
+        elif key == Qt.Key_C:
+            if not self.continuousMode():
+                self.setContinuousMode(True)
+        elif not self.continuousMode() and key == Qt.Key_Up:
+            num = self.currentPageNumber()
+            if num > 1 and self.pageLayoutMode() != "single":
+                self.setCurrentPageNumber(num - 2)
+            elif num > 0:
+                self.setCurrentPageNumber(num - 1)
+        elif not self.continuousMode() and key == Qt.Key_Down:
+            num = self.currentPageNumber()
+            if num < self.pageCount()+1 and self.pageLayoutMode() != "single":
+                self.setCurrentPageNumber(num + 2)
+            elif num < self.pageCount():
+                self.setCurrentPageNumber(num + 1)
+        elif key == Qt.Key_Home:
+            self.goToPos(qpageview.view.Position(0, 0.5, 0))
+        elif key == Qt.Key_End:
+            self.goToPos(qpageview.view.Position(self.pageCount(), 0.5, 1))
         elif key == Qt.Key_G:
             self.goToPageDialog()
         elif key == Qt.Key_BracketLeft:
@@ -629,19 +863,71 @@ class PdfViewer(
             self.resize_to_right()
         elif key == Qt.Key_T:
             self.toggle_on_top()
+        elif key == Qt.Key_L:
+            self.hscroll_lock = not self.hscroll_lock
         # elif key == Qt.Key_Q and mod == Qt.ControlModifier:
         #     self.app.quit()
         elif key == Qt.Key_R:
             print("reload!")
             self.reload()
+            self.populate_toc_menu()
         elif key == Qt.Key_P and mod == Qt.ControlModifier:
             self.print()
         elif key == Qt.Key_P:
             self.openInPreview()
+        elif key == Qt.Key_D:
+            self.duplicate()
         elif key == Qt.Key_W and mod == Qt.ControlModifier:
             self.close()
+        elif key == Qt.Key_H or key == Qt.Key_Question:
+            self.helpDialog()
         else:
             super().keyPressEvent(ev)
+
+    def helpDialog(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowFlags(Qt.Sheet)
+        msg_box.setText("Keyboard shortcuts")
+        msg_box.setInformativeText("""
+            <table>
+            <tr><td> =  <td> Zoom in 
+            <tr><td> -  <td> Zoom out
+            <tr><td> 0  <td> Reset zoom
+            <tr><td> c  <td> Continuous mode
+            <tr><td> s  <td> Single page mode
+            <tr><td> 1  <td> Single page layout
+            <tr><td> 2  <td> Double page layout (right)
+            <tr><td> 3  <td> Double page layout (left)
+            <tr><td> g  <td> Go to page
+            <tr><td> [  <td> Go previous
+            <tr><td> ]  <td> Go next
+            <tr><td> m  <td> Reset full size
+            <tr><td> ,  <td> Resize left
+            <tr><td> .  <td> Resize right
+            <tr><td> t  <td> Toggle "stay on top"
+            <tr><td> l  <td> Toggle horizontal scroll lock
+            <tr><td> r  <td> Reload document
+            <tr><td> p  <td> Open in Preview app
+            <tr><td> ⌘p <td> Print (using Qt)
+            <tr><td> d  <td> Duplicate window
+            <tr><td> ⌘w <td> Close window
+            <tr><td> h &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
+            <tr><td> ? &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
+            </table>
+        """)
+        msg_grid = msg_box.findChild(QGridLayout)
+        msg_icon_label = msg_box.findChild(QLabel, "qt_msgboxex_icon_label")
+        msg_grid.removeWidget(msg_icon_label)
+        msg_label = msg_box.findChild(QLabel, "qt_msgbox_label")
+        msg_grid.removeWidget(msg_label)
+        msg_grid.addWidget(msg_label, 0, 0, 1, 2)
+        msg_info_label = msg_box.findChild(QLabel, "qt_msgbox_informativelabel")
+        msg_grid.removeWidget(msg_info_label)
+        msg_grid.addWidget(msg_info_label, 1, 0, 1, 2)
+        msg_label.setContentsMargins(10, 10, 10, 0)
+        msg_info_label.setContentsMargins(10, 0, 10, 0)
+        msg_box.setContentsMargins(2, 0, 0, 0)
+        msg_box.open()
 
     def linkClickEvent(self, ev, page, link):
         if link.url:
@@ -669,7 +955,12 @@ class PdfViewer(
 
     def goToPos(self, pos):
         self.savePos()
-        self.setPosition(pos)
+        if self.hscroll_lock:
+            self.setPosition(qpageview.view.Position(
+                pos.pageNumber, 0.5, pos.y
+            ))
+        else:
+            self.setPosition(pos)
         self.savePos()
 
     def goToNextPos(self):
@@ -720,8 +1011,34 @@ class PdfViewer(
                 return
         super().mousePressEvent(ev)
 
+    def wheelEvent(self, ev):
+        if not self.hscroll_lock:
+            super().wheelEvent(ev)
+        else:
+            angleDelta = ev.angleDelta()
+            angleDelta.setX(0);
+            super().wheelEvent(QWheelEvent(
+                ev.position(),
+                ev.globalPosition(),
+                ev.pixelDelta(),
+                angleDelta,
+                ev.buttons(),
+                ev.modifiers(),
+                ev.phase(),
+                ev.inverted(),
+            ))
+
     def closeEvent(self, ev):
-        del self.app.viewers[self.file]
+        del self.app.viewers[self.key]
+        for skey in reversed(self.siblings):
+            if skey in self.app.viewers:
+                self.app.viewers[skey].update_tab_bar()
+        # for viewer in self.app.viewers.values():
+        #     if self.file == viewer.file:
+        #         break
+        # else:
+        #     del self.app.documents[self.file]
+
 
 ########################################################################
 # main
