@@ -2,8 +2,9 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
+    #~/opt/miniconda3/envs/env-dev-qpageview/bin/python \
 exec \
-    ~/opt/miniconda3/envs/env-dev-qpageview/bin/python \
+    ~/opt/mambaforge/envs/env-dev-qpageview/bin/python \
     "$SCRIPT_DIR"/aviewer.py \
     "$@" \
     &> "$HOME/.aviewer.log"

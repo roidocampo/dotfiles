@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtNetwork import *
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
+from PyQt5.QtWebEngineWidgets import *
 
 ########################################################################
 # FixedPopplerRenderer
@@ -234,7 +235,10 @@ class PdfViewerApp(QApplication):
             viewer.raise_()
             viewer.activateWindow()
         else:
-            new_viewer = PdfViewer(self, file)
+            if file.suffix == ".html":
+                new_viewer = HtmlViewer(self, file)
+            else:
+                new_viewer = PdfViewer(self, file)
             self.viewers[file] = new_viewer
 
     def old_open_pdf(self, file):
@@ -387,6 +391,176 @@ class MoviePlayer(QLabel):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.movie.setScaledSize(event.size())
+
+########################################################################
+# HtmlViewer
+########################################################################
+
+class HtmlViewer(QMainWindow):
+
+    def __init__(self, app, file, page_num=1):
+        super().__init__()
+        self.app = app
+        self.on_top = False
+        self.file = Path(file).resolve()
+        self.browser = QWebEngineView(self)
+        self.setCentralWidget(self.browser)
+        self.init_window()
+        self.init_document()
+        self.show()
+
+    def init_window(self):
+        self.toggle_on_top(self.on_top, False)
+        self.init_size()
+        self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
+        self.browser.installEventFilter(self)
+
+    def init_document(self):
+        self._document_loaded = False
+        self.load_document()
+        self.reloader_timer = QTimer()
+        self.reloader_timer.timeout.connect(self.autoReloadEvent)
+        self.reloader_timer.start(1000)
+
+    def load_document(self):
+        self.browser.load(QUrl("file://" + str(self.file)))
+
+    def autoReloadEvent(self):
+        if self.file.exists():
+            if self._document_loaded:
+                new_mtime = self.file.stat().st_mtime
+                if new_mtime > self._document_mtime:
+                    self.load_document()
+                    # self.reload()
+                    # self.populate_toc_menu()
+                    self._document_mtime = new_mtime
+            else:
+                self.load_document()
+        else:
+            self._document_mtime = -1
+            if self._document_loaded:
+                # self.clear()
+                self._document_loaded = False
+                self._document_load_error = None
+
+    def toggle_on_top(self, on_top=None, show=True):
+        if on_top is None:
+            self.on_top = not self.on_top
+        else:
+            self.on_top = on_top
+        flags = Qt.CustomizeWindowHint
+        if self.on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        if show:
+            self.show()
+
+    def init_size(self):
+        ag = self.app.desktop().availableGeometry()
+        if ag.height() > 1400:
+            self.size_state = [2, 1]
+            self.resize_to_right()
+        else:
+            self.size_state = [1, 0]
+            self.resize_full()
+
+    def resize_full(self):
+        ag = self.app.desktop().availableGeometry()
+        self.move(ag.left(), ag.top())
+        self.resize(ag.width(), ag.height())
+        self.size_state = [1, 0]
+
+    def resize_to_left(self):
+        ag = self.app.desktop().availableGeometry()
+        if self.size_state == [1, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(ag.width()//2, ag.height())
+            self.size_state = [2, 0]
+        elif self.size_state == [2, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(8*ag.width()//19, ag.height())
+            self.size_state = [2.375, 0]
+        elif self.size_state == [2, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [2, 0]
+        elif self.size_state == [2.375, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(ag.width()//3, ag.height())
+            self.size_state = [3, 0]
+        elif self.size_state == [2.375, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [2.375, 0]
+        elif self.size_state == [3, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [3, 0]
+        elif self.size_state == [3, 2]:
+            self.move(ag.left()+ag.width()//3+1, ag.top())
+            self.size_state = [3, 1]
+        # pos = self.position()
+        # self.setPosition(qpageview.view.Position(
+        #     pos.pageNumber, 0.5, pos.y
+        # ))
+
+    def resize_to_right(self):
+        ag = self.app.desktop().availableGeometry()
+        if self.size_state == [1, 0]:
+            self.move(ag.left()+ag.width()//2+1,ag.top())
+            self.resize(ag.width()//2, ag.height())
+            self.size_state = [2, 1]
+        elif self.size_state == [2, 0]:
+            self.move(ag.left()+ag.width()//2+1,ag.top())
+            self.size_state = [2, 1]
+        elif self.size_state == [2, 1]:
+            self.move(ag.left()+11*ag.width()//19+1,ag.top())
+            self.resize(8*ag.width()//19, ag.height())
+            self.size_state = [2.375, 1]
+        elif self.size_state == [2.375, 0]:
+            self.move(ag.left()+11*ag.width()//19+1,ag.top())
+            self.size_state = [2.375, 1]
+        elif self.size_state == [2.375, 1]:
+            self.move(ag.left()+2*ag.width()//3+1,ag.top())
+            self.resize(ag.width()//3, ag.height())
+            self.size_state = [3, 2]
+        elif self.size_state == [3, 0]:
+            self.move(ag.left()+ag.width()//3+1,ag.top())
+            self.size_state = [3, 1]
+        elif self.size_state == [3, 1]:
+            self.move(ag.left()+2*ag.width()//3+1,ag.top())
+            self.size_state = [3, 2]
+        # pos = self.position()
+        # self.setPosition(qpageview.view.Position(
+        #     pos.pageNumber, 0.5, pos.y
+        # ))
+
+    def eventFilter(self, source, event):
+        if (event.type() == QEvent.KeyPress):
+            key = ev.key()
+            if ev.key in [
+                Qt.Key_Comma,
+                Qt.Key_Period,
+                Qt.Key_M,
+                Qt.Key_T,
+                Qt.Key_W,
+            ]:
+                return False
+        return super().eventFilter(source, event)
+
+    def keyPressEvent(self, ev):
+        print(ev, flush=True)
+        key = ev.key()
+        mod = ev.modifiers()
+        if key == Qt.Key_Comma:
+            self.resize_to_left()
+        elif key == Qt.Key_Period:
+            self.resize_to_right()
+        elif key == Qt.Key_M:
+            self.resize_full()
+        elif key == Qt.Key_T:
+            self.toggle_on_top()
+        elif key == Qt.Key_W and mod == Qt.ControlModifier:
+            self.close()
+        else:
+            super().keyPressEvent(ev)
 
 ########################################################################
 # PdfViewer
@@ -658,6 +832,7 @@ class PdfViewer(
     def load_document(self):
         success = True
         self.movie_player = None
+        self.web_view = None
         if self.file.suffix == ".pdf":
             # if self.file in self.app.documents:
             #     doc = self.app.documents[self.file]
@@ -672,6 +847,9 @@ class PdfViewer(
         elif self.file.suffix == ".gif":
             self.loadImages([str(self.file)])
             self.movie_player = MoviePlayer.make(self, str(self.file))
+        # elif self.file.suffix == ".html":
+        #     # self.loadImages([str(self.file)])
+        #     self.web_view = HtmlViewer.make(self, str(self.file))
         else:
             self.loadImages([str(self.file)])
         if success:
