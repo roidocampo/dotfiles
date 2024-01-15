@@ -1,0 +1,16 @@
+name: env-dev-qpageview
+channels:
+  - conda-forge
+  - default
+platforms:
+  - osx-64
+dependencies:
+  - python
+  - pip
+  - qt
+  - pyqt
+  - pyqtwebengine
+  - poppler-qt
+  - pip:
+    - qpageview
+

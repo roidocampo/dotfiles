@@ -427,7 +427,7 @@ function _aviewer_view() {
         file=$(basename -- "$1")
         ext="${file##*.}"
         case "$ext" in
-            pdf|svg|bmp|gif|jpg|jpeg|png|pbm|pgm|ppm|xbm|xpm|tiff)
+            pdf|svg|bmp|gif|jpg|jpeg|png|pbm|pgm|ppm|xbm|xpm|tiff|html)
                 open -a "$HOME/.dotfiles/apps/aViewer.app" "$1"
                 return
                 ;;
@@ -703,7 +703,8 @@ function cenv() {
                     fi
                     echo "Creating environment \`$ENV_NAME\`."
                     # mamba env create --file "$ENV_FILE"
-                    mamba lock install --name "$ENV_NAME" "$LOCK_FILE"
+                    # mamba lock install --name "$ENV_NAME" "$LOCK_FILE"
+                    conda lock install --name "$ENV_NAME" "$LOCK_FILE"
                 else
                     echo "Could not determine environment from \`$ENV_FILE\`."
                     return 2
@@ -731,7 +732,8 @@ function cenv() {
                     return 1
                 elif [ "$ENV_NAME" ]; then
                     echo "Creating lock for environment \`$ENV_NAME\`."
-                    mamba lock --file "$ENV_FILE" --lockfile "$LOCK_FILE"
+                    # mamba lock --file "$ENV_FILE" --lockfile "$LOCK_FILE"
+                    conda lock --file "$ENV_FILE" --lockfile "$LOCK_FILE"
                 else
                     echo "Could not determine environment from \`$ENV_FILE\`."
                     return 2
