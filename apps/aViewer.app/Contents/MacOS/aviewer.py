@@ -859,7 +859,8 @@ class PdfViewer(
             self.populate_toc_menu()
         else:
             self._document_loaded = False
-            self._document_load_error = err.getvalue()
+            # self._document_load_error = err.getvalue()
+            self._document_load_error = "error"
             self._document_mtime = -1
 
     def autoReloadEvent(self):

@@ -698,13 +698,17 @@ function cenv() {
                     if [ -e "$CACHE_FILE" ]; then
                         rm "$CACHE_FILE"
                     fi
-                    if [ ! -f "$LOCK_FILE" ]; then
-                        cenv lock "$ENV_FILE" || return 4
-                    fi
-                    echo "Creating environment \`$ENV_NAME\`."
-                    # mamba env create --file "$ENV_FILE"
-                    # mamba lock install --name "$ENV_NAME" "$LOCK_FILE"
-                    conda lock install --name "$ENV_NAME" "$LOCK_FILE"
+                    mamba env create --file "$ENV_FILE"
+                    #
+                    # LOCK FILES DISABLED FOR NOW
+                    #
+                    # if [ ! -f "$LOCK_FILE" ]; then
+                    #     cenv lock "$ENV_FILE" || return 4
+                    # fi
+                    # echo "Creating environment \`$ENV_NAME\`."
+                    # # mamba env create --file "$ENV_FILE"
+                    # # mamba lock install --name "$ENV_NAME" "$LOCK_FILE"
+                    # conda lock install --name "$ENV_NAME" "$LOCK_FILE"
                 else
                     echo "Could not determine environment from \`$ENV_FILE\`."
                     return 2
@@ -716,6 +720,8 @@ function cenv() {
             ;;
 
         lock|-lock)
+            echo NO LOCKS FOR NOW
+            return
             local ENV_FILE="environment.yml"
             if [ -n "$2" ]; then
                 if [ -f "$2" ]; then
@@ -746,7 +752,8 @@ function cenv() {
 
         update|-update)
             shift
-            cenv lock "$@" && cenv create "$@"
+            # cenv lock "$@" && cenv create "$@"
+            cenv remove "$@" && cenv create "$@"
             ;;
 
         remove|-remove)
@@ -764,7 +771,7 @@ function cenv() {
                     echo "Removing environment \`$ENV_NAME\`."
                     local CACHE_FILE="$HOME/.cenv-cache/$ENV_NAME.env"
                     if [ -e "$CACHE_FILE" ]; then
-                        rm "$CACHE_FILE"
+                        rm -f "$CACHE_FILE"
                     fi
                     mamba env remove --name "$ENV_NAME"
                 else
