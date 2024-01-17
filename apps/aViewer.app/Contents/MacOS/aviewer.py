@@ -398,14 +398,92 @@ class MoviePlayer(QLabel):
 
 class HtmlViewer(QMainWindow):
 
+    EML_HEAD = """<!doctype html>
+        <html lang="en">
+        <meta charset="utf-8">
+        <style>
+        /*
+            html {
+                overflow : hidden;
+                width: 100%;
+                height: 100%;
+                background-color: #ccc;
+                text-align: center;
+                box-sizing: border-box;
+                padding: 0px;
+                margin: 0px;
+            }
+            *, *:before, *:after {
+                box-sizing: inherit;
+            }
+            body {
+                overflow : hidden;
+                width: 100%;
+                height: 100%;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 12pt;
+                text-align: center;
+                padding-top: 10px;
+                margin: 0px;
+                position: relative;
+            }
+        */
+            #aviewer_content {
+                overflow : auto;
+                background-color: white;
+                text-align: left;
+                max-width: 700px;
+                height: calc(100% - 10px);
+                margin: 0px auto;
+                background-color: shite;
+                padding: 20px ;
+                border: 1px solid #666;
+                position: relative;
+            }
+            .lds-dual-ring {
+                position: absolute;
+                display: flex;
+                background-color: #000a;
+                border: 1px solid black;
+                top: 0px;
+                bottom: 0px;
+                left: 0px;
+                right: 0px;
+                justify-content: center;
+                align-items: center;
+            }
+            .lds-dual-ring:after {
+                content: " ";
+                display: inline-block;
+                width: 64px;
+                height: 64px;
+                border-radius: 50%;
+                border: 6px solid #ccc;
+                border-color: #ccc transparent #ccc transparent;
+                animation: lds-dual-ring 1.2s linear infinite;
+            }
+            @keyframes lds-dual-ring {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+        <div id="aviewer_content">
+    """
+
     def __init__(self, app, file, page_num=1):
         super().__init__()
         self.app = app
         self.on_top = False
         self.file = Path(file).resolve()
+        self.eml_file = self.file.with_suffix(".eml")
         self.browser = QWebEngineView(self)
         self.setCentralWidget(self.browser)
         self.init_window()
+        self.init_menu()
         self.init_document()
         self.show()
 
@@ -415,17 +493,51 @@ class HtmlViewer(QMainWindow):
         self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
         self.browser.installEventFilter(self)
 
+    def init_menu(self):
+        self.menu_bar = QMenuBar(self)
+        self.toc_menu = self.menu_bar.addMenu(self.file.name)
+        self.toc_menu.setTitle("Loading...")
+        self.toc_menu.addAction("HTML file")
+
+    def update_menu_title(self):
+        self.toc_menu.setTitle(
+            f"{self.file.name} ({self.file.parent})"
+        )
+
     def init_document(self):
         self._document_loaded = False
+        self._scroll_jobs = []
         self.load_document()
         self.reloader_timer = QTimer()
         self.reloader_timer.timeout.connect(self.autoReloadEvent)
         self.reloader_timer.start(1000)
 
     def load_document(self):
-        self.browser.load(QUrl("file://" + str(self.file)))
+        if self._document_loaded and not self._scroll_jobs:
+            document_scroll = self.browser.page().scrollPosition()
+        else:
+            document_scroll = None
+        if self.eml_file.exists():
+            html = self.EML_HEAD
+            with open(self.file, "r") as f:
+                html += f.read()
+            self.browser.setHtml(html)
+        else:
+            self.browser.load(QUrl("file://" + str(self.file)))
+        self._document_loaded = True
+        self._document_mtime = self.file.stat().st_mtime
+        self.update_menu_title()
+        if document_scroll is not None:
+            self._scroll_jobs.append(document_scroll)
 
     def autoReloadEvent(self):
+        if self._document_loaded:
+            while self._scroll_jobs:
+                document_scroll = self._scroll_jobs.pop(0)
+                x = document_scroll.x()
+                y = document_scroll.y()
+                print(f"window.scrollTo({x}, {y});", flush=True)
+                self.browser.page().runJavaScript(f"window.scrollTo({x}, {y});")
         if self.file.exists():
             if self._document_loaded:
                 new_mtime = self.file.stat().st_mtime
@@ -442,6 +554,7 @@ class HtmlViewer(QMainWindow):
                 # self.clear()
                 self._document_loaded = False
                 self._document_load_error = None
+
 
     def toggle_on_top(self, on_top=None, show=True):
         if on_top is None:
@@ -536,31 +649,83 @@ class HtmlViewer(QMainWindow):
         if (event.type() == QEvent.KeyPress):
             key = ev.key()
             if ev.key in [
+                Qt.Key_C,
                 Qt.Key_Comma,
                 Qt.Key_Period,
                 Qt.Key_M,
                 Qt.Key_T,
+                Qt.Key_R,
                 Qt.Key_W,
+                Qt.Key_H,
+                Qt.Key_Question,
             ]:
                 return False
         return super().eventFilter(source, event)
+
+    def clipboard_copy_html(self):
+        if self.file.exists():
+            with open(self.file) as f:
+                html = f.read()
+            cb_data = QMimeData()
+            cb_data.setText(html)
+            cb_data.setHtml(html)
+            cb = QGuiApplication.clipboard()
+            cb.setMimeData(cb_data)
 
     def keyPressEvent(self, ev):
         print(ev, flush=True)
         key = ev.key()
         mod = ev.modifiers()
-        if key == Qt.Key_Comma:
+        if key == Qt.Key_C:
+            self.clipboard_copy_html()
+        elif key == Qt.Key_Comma:
             self.resize_to_left()
         elif key == Qt.Key_Period:
             self.resize_to_right()
         elif key == Qt.Key_M:
             self.resize_full()
+        elif key == Qt.Key_R:
+            self.load_document()
         elif key == Qt.Key_T:
             self.toggle_on_top()
         elif key == Qt.Key_W and mod == Qt.ControlModifier:
             self.close()
+        elif key == Qt.Key_H or key == Qt.Key_Question:
+            self.helpDialog()
         else:
             super().keyPressEvent(ev)
+
+    def helpDialog(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowFlags(Qt.Sheet)
+        msg_box.setText("Keyboard shortcuts")
+        msg_box.setInformativeText("""
+            <table>
+            <tr><td> c  <td> Copy HTML to clipboard
+            <tr><td> m  <td> Reset full size
+            <tr><td> ,  <td> Resize left
+            <tr><td> .  <td> Resize right
+            <tr><td> t  <td> Toggle "stay on top"
+            <tr><td> r  <td> Reload document
+            <tr><td> ⌘w <td> Close window
+            <tr><td> h &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
+            <tr><td> ? &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
+            </table>
+        """)
+        msg_grid = msg_box.findChild(QGridLayout)
+        msg_icon_label = msg_box.findChild(QLabel, "qt_msgboxex_icon_label")
+        msg_grid.removeWidget(msg_icon_label)
+        msg_label = msg_box.findChild(QLabel, "qt_msgbox_label")
+        msg_grid.removeWidget(msg_label)
+        msg_grid.addWidget(msg_label, 0, 0, 1, 2)
+        msg_info_label = msg_box.findChild(QLabel, "qt_msgbox_informativelabel")
+        msg_grid.removeWidget(msg_info_label)
+        msg_grid.addWidget(msg_info_label, 1, 0, 1, 2)
+        msg_label.setContentsMargins(10, 10, 10, 0)
+        msg_info_label.setContentsMargins(10, 0, 10, 0)
+        msg_box.setContentsMargins(2, 0, 0, 0)
+        msg_box.open()
+
 
 ########################################################################
 # PdfViewer
