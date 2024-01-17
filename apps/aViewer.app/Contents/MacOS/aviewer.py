@@ -402,6 +402,30 @@ class HtmlViewer(QMainWindow):
         <html lang="en">
         <meta charset="utf-8">
         <style>
+            *, *:before, *:after {
+                box-sizing: inherit;
+            }
+            html, body {
+                padding: 0px;
+                margin: 0px;
+                position: relative;
+                box-sizing: border-box;
+            }
+            body {
+                background-color: #bfbfbf;
+                overscroll-behavior-y: none;
+                text-align: center;
+            }
+            #aviewer_content {
+                position: relative;
+                max-width: 700px;
+                margin: 10px auto;
+                padding: 20px ;
+                text-align: left;
+                background-color: white;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 12pt;
+            }
         /*
             html {
                 overflow : hidden;
@@ -427,7 +451,6 @@ class HtmlViewer(QMainWindow):
                 margin: 0px;
                 position: relative;
             }
-        */
             #aviewer_content {
                 overflow : auto;
                 background-color: white;
@@ -470,6 +493,7 @@ class HtmlViewer(QMainWindow):
                     transform: rotate(360deg);
                 }
             }
+        */
         </style>
         <div id="aviewer_content">
     """
@@ -491,7 +515,7 @@ class HtmlViewer(QMainWindow):
         self.toggle_on_top(self.on_top, False)
         self.init_size()
         self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
-        self.browser.installEventFilter(self)
+        #self.browser.installEventFilter(self)
 
     def init_menu(self):
         self.menu_bar = QMenuBar(self)
@@ -645,35 +669,25 @@ class HtmlViewer(QMainWindow):
         #     pos.pageNumber, 0.5, pos.y
         # ))
 
-    def eventFilter(self, source, event):
-        if (event.type() == QEvent.KeyPress):
-            key = ev.key()
-            if ev.key in [
-                Qt.Key_C,
-                Qt.Key_Comma,
-                Qt.Key_Period,
-                Qt.Key_M,
-                Qt.Key_T,
-                Qt.Key_R,
-                Qt.Key_W,
-                Qt.Key_H,
-                Qt.Key_Question,
-            ]:
-                return False
-        return super().eventFilter(source, event)
-
-    def clipboard_copy_html(self):
-        if self.file.exists():
-            with open(self.file) as f:
-                html = f.read()
-            cb_data = QMimeData()
-            cb_data.setText(html)
-            cb_data.setHtml(html)
-            cb = QGuiApplication.clipboard()
-            cb.setMimeData(cb_data)
+    # def XeventFilter(self, source, event):
+    #     if (event.type() == QEvent.KeyPress):
+    #         key = ev.key()
+    #         if ev.key in [
+    #             Qt.Key_C,
+    #             Qt.Key_Comma,
+    #             Qt.Key_Period,
+    #             Qt.Key_M,
+    #             Qt.Key_T,
+    #             Qt.Key_R,
+    #             Qt.Key_I,
+    #             Qt.Key_W,
+    #             Qt.Key_H,
+    #             Qt.Key_Question,
+    #         ]:
+    #             return False
+    #     return super().eventFilter(source, event)
 
     def keyPressEvent(self, ev):
-        print(ev, flush=True)
         key = ev.key()
         mod = ev.modifiers()
         if key == Qt.Key_C:
@@ -686,6 +700,8 @@ class HtmlViewer(QMainWindow):
             self.resize_full()
         elif key == Qt.Key_R:
             self.load_document()
+        elif key == Qt.Key_I:
+            self.open_dev_tools()
         elif key == Qt.Key_T:
             self.toggle_on_top()
         elif key == Qt.Key_W and mod == Qt.ControlModifier:
@@ -707,6 +723,7 @@ class HtmlViewer(QMainWindow):
             <tr><td> .  <td> Resize right
             <tr><td> t  <td> Toggle "stay on top"
             <tr><td> r  <td> Reload document
+            <tr><td> i  <td> Open dev tools
             <tr><td> ⌘w <td> Close window
             <tr><td> h &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
             <tr><td> ? &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
@@ -725,6 +742,21 @@ class HtmlViewer(QMainWindow):
         msg_info_label.setContentsMargins(10, 0, 10, 0)
         msg_box.setContentsMargins(2, 0, 0, 0)
         msg_box.open()
+
+    def open_dev_tools(self):
+        self.dt = dev_tools_window = QWebEngineView()
+        dev_tools_window.page().setInspectedPage(self.browser.page())
+        dev_tools_window.show()
+
+    def clipboard_copy_html(self):
+        if self.file.exists():
+            with open(self.file) as f:
+                html = f.read()
+            cb_data = QMimeData()
+            cb_data.setText(html)
+            cb_data.setHtml(html)
+            cb = QGuiApplication.clipboard()
+            cb.setMimeData(cb_data)
 
 
 ########################################################################
@@ -746,7 +778,7 @@ class PdfViewer(
             self.file = Path(file).resolve()
             self.gen_key()
             self.siblings = [ self.key ]
-            for v in self.app.viewers.items():
+            for v in self.app.viewers.values():
                 if v.file == self.file:
                     sibs = [ s for s in v.siblings ]
                     for skey in sibs:
