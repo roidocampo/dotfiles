@@ -8,6 +8,7 @@ import os
 import qpageview
 import qpageview.highlight
 import qpageview.magnifier
+import qpageview.page
 import qpageview.poppler
 import qpageview.rubberband
 import qpageview.widgetoverlay
@@ -393,10 +394,10 @@ class MoviePlayer(QLabel):
         self.movie.setScaledSize(event.size())
 
 ########################################################################
-# HtmlViewer
+# OldHtmlViewer
 ########################################################################
 
-class HtmlViewer(QMainWindow):
+class OldHtmlViewer(QMainWindow):
 
     EML_HEAD = """<!doctype html>
         <html lang="en">
@@ -758,6 +759,296 @@ class HtmlViewer(QMainWindow):
             cb = QGuiApplication.clipboard()
             cb.setMimeData(cb_data)
 
+
+########################################################################
+# PdfViewer
+########################################################################
+
+class HtmlViewer(
+    qpageview.link.LinkViewMixin,
+    qpageview.shadow.ShadowViewMixin,
+    qpageview.highlight.HighlightViewMixin,
+    qpageview.widgetoverlay.WidgetOverlayViewMixin,
+    qpageview.view.View
+):
+
+    def __init__(self, app, file):
+        super().__init__()
+        self.app = app
+        self.file = Path(file).resolve()
+        self.posHist = []
+        self.posHistIdx = -1
+        self.synctex_dir = None
+        self.hscroll_lock = True
+        self.on_top = False
+        self.init_window()
+        self.init_menu()
+        self.init_view()
+        self.init_document()
+        self.show()
+
+    def init_window(self):
+        self.toggle_on_top(self.on_top, False)
+        self.init_size()
+        self.kineticScrollingEnabled = False
+        self.setWindowTitle(f"{self.file.name} ({self.file.parent})")
+
+    def toggle_on_top(self, on_top=None, show=True):
+        if on_top is None:
+            self.on_top = not self.on_top
+        else:
+            self.on_top = on_top
+        flags = Qt.CustomizeWindowHint
+        if self.on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        if show:
+            self.show()
+
+    def init_size(self):
+        ag = self.app.desktop().availableGeometry()
+        if ag.height() > 1400:
+            self.size_state = [2, 1]
+            self.resize_to_right()
+        else:
+            self.size_state = [1, 0]
+            self.resize_full()
+
+    def resize_full(self):
+        ag = self.app.desktop().availableGeometry()
+        self.move(ag.left(), ag.top())
+        self.resize(ag.width(), ag.height())
+        self.size_state = [1, 0]
+
+    def resize_to_left(self):
+        ag = self.app.desktop().availableGeometry()
+        if self.size_state == [1, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(ag.width()//2, ag.height())
+            self.size_state = [2, 0]
+        elif self.size_state == [2, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(8*ag.width()//19, ag.height())
+            self.size_state = [2.375, 0]
+        elif self.size_state == [2, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [2, 0]
+        elif self.size_state == [2.375, 0]:
+            self.move(ag.left(), ag.top())
+            self.resize(ag.width()//3, ag.height())
+            self.size_state = [3, 0]
+        elif self.size_state == [2.375, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [2.375, 0]
+        elif self.size_state == [3, 1]:
+            self.move(ag.left(), ag.top())
+            self.size_state = [3, 0]
+        elif self.size_state == [3, 2]:
+            self.move(ag.left()+ag.width()//3+1, ag.top())
+            self.size_state = [3, 1]
+        pos = self.position()
+        self.setPosition(qpageview.view.Position(
+            pos.pageNumber, 0.5, pos.y
+        ))
+
+    def resize_to_right(self):
+        ag = self.app.desktop().availableGeometry()
+        if self.size_state == [1, 0]:
+            self.move(ag.left()+ag.width()//2+1,ag.top())
+            self.resize(ag.width()//2, ag.height())
+            self.size_state = [2, 1]
+        elif self.size_state == [2, 0]:
+            self.move(ag.left()+ag.width()//2+1,ag.top())
+            self.size_state = [2, 1]
+        elif self.size_state == [2, 1]:
+            self.move(ag.left()+11*ag.width()//19+1,ag.top())
+            self.resize(8*ag.width()//19, ag.height())
+            self.size_state = [2.375, 1]
+        elif self.size_state == [2.375, 0]:
+            self.move(ag.left()+11*ag.width()//19+1,ag.top())
+            self.size_state = [2.375, 1]
+        elif self.size_state == [2.375, 1]:
+            self.move(ag.left()+2*ag.width()//3+1,ag.top())
+            self.resize(ag.width()//3, ag.height())
+            self.size_state = [3, 2]
+        elif self.size_state == [3, 0]:
+            self.move(ag.left()+ag.width()//3+1,ag.top())
+            self.size_state = [3, 1]
+        elif self.size_state == [3, 1]:
+            self.move(ag.left()+2*ag.width()//3+1,ag.top())
+            self.size_state = [3, 2]
+        pos = self.position()
+        self.setPosition(qpageview.view.Position(
+            pos.pageNumber, 0.5, pos.y
+        ))
+
+    def init_menu(self):
+        self.menu_bar = QMenuBar(self)
+        self.toc_menu = self.menu_bar.addMenu(self.file.name)
+        self.toc_menu.setTitle("Loading...")
+        self.toc_menu.addAction("HTML file")
+
+    def update_menu_title(self):
+        self.toc_menu.setTitle(
+            f"{self.file.name} ({self.file.parent})"
+        )
+
+    def init_view(self):
+        if self.size_state == [1, 0]:
+            self.setViewMode(qpageview.FitWidth)
+            self.strictPagingEnabled = False
+            self.zoomOut(factor=1.1**2)
+        else:
+            self.setViewMode(qpageview.FitHeight)
+            self.strictPagingEnabled = True
+        self.zoomNaturalSize()
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+    def init_document(self):
+        self._document_loaded = False
+        self.load_document()
+        self.reloader_timer = QTimer()
+        self.reloader_timer.timeout.connect(self.autoReloadEvent)
+        self.reloader_timer.start(1000)
+
+    def load_document(self):
+        self._first_load = True
+        self.main_page = page = qpageview.page.BlankPage()
+        page.pageWidth = 360
+        h = self.app.desktop().availableGeometry().height()
+        r = self.app.desktop().devicePixelRatio()
+        page.pageHeight = h / r
+        self.setPages([ page ])
+        self.browser = QWebEngineView()
+        self.browser.setEnabled(False)
+        self.browser.page().loadFinished.connect(self.pageLoadedEvent)
+        self.addWidget(self.browser, self.page(1))
+        if self.file.exists():
+            self.load_html()
+            self.update_menu_title()
+            self._document_loaded = True
+            self._document_mtime = self.file.stat().st_mtime
+        else:
+            self._document_loaded = False
+            self._document_mtime = -1
+
+    def load_html(self):
+        self.browser.load(QUrl("file://" + str(self.file)))
+
+    def pageLoadedEvent(self, ok):
+        print("Loaded")
+        self.browser.page().runJavaScript(
+            "[document.documentElement.scrollHeight, document.documentElement.scrollWidth]",
+            self.pageLoadedEventCB,
+        )
+
+    def pageLoadedEventCB(self, data):
+        sb = self.verticalScrollBar()
+        at_end = sb.value() == sb.maximum()
+        h, w = data
+        self.removeWidget(self.browser)
+        with self.modifyPage(1) as page:
+            page.pageHeight = h * 360 / w
+        self.addWidget(self.browser, self.page(1))
+        if self._first_load:
+            self._first_load = False
+        elif at_end:
+            pos = self.position()
+            pos = qpageview.view.Position(pos.pageNumber, pos.x, 1)
+            self.setPosition(pos)
+
+    def autoReloadEvent(self):
+        if self.file.exists():
+            if self._document_loaded:
+                new_mtime = self.file.stat().st_mtime
+                if new_mtime > self._document_mtime:
+                    self.load_html()
+                    self._document_mtime = new_mtime
+            else:
+                self.load_document()
+        else:
+            self._document_mtime = -1
+            if self._document_loaded:
+                self.clear()
+                self._document_loaded = False
+
+    def keyPressEvent(self, ev):
+        key = ev.key()
+        mod = ev.modifiers()
+        if key == Qt.Key_Equal:
+            self.strictPagingEnabled = False
+            self.zoomIn()
+        elif key == Qt.Key_Minus:
+            self.strictPagingEnabled = False
+            self.zoomOut()
+        elif key == Qt.Key_0:
+            self.setViewMode(qpageview.FitWidth)
+            self.strictPagingEnabled = False
+        elif key == Qt.Key_Home:
+            self.goToPos(qpageview.view.Position(0, 0.5, 0))
+        elif key == Qt.Key_End:
+            self.goToPos(qpageview.view.Position(self.pageCount(), 0.5, 1))
+        elif key == Qt.Key_BracketLeft:
+            self.goToPrevPos()
+        elif key == Qt.Key_BracketRight:
+            self.goToNextPos()
+        elif key == Qt.Key_M:
+            self.resize_full()
+        elif key == Qt.Key_Comma:
+            self.resize_to_left()
+        elif key == Qt.Key_Period:
+            self.resize_to_right()
+        elif key == Qt.Key_T:
+            self.toggle_on_top()
+        elif key == Qt.Key_L:
+            self.hscroll_lock = not self.hscroll_lock
+        # elif key == Qt.Key_Q and mod == Qt.ControlModifier:
+        #     self.app.quit()
+        elif key == Qt.Key_R:
+            print("reload!")
+            self.reload()
+        elif key == Qt.Key_W and mod == Qt.ControlModifier:
+            self.close()
+        elif key == Qt.Key_H or key == Qt.Key_Question:
+            self.helpDialog()
+        else:
+            super().keyPressEvent(ev)
+
+    def helpDialog(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowFlags(Qt.Sheet)
+        msg_box.setText("Keyboard shortcuts")
+        msg_box.setInformativeText("""
+            <table>
+            <tr><td> =  <td> Zoom in 
+            <tr><td> -  <td> Zoom out
+            <tr><td> 0  <td> Reset zoom
+            <tr><td> [  <td> Go previous
+            <tr><td> ]  <td> Go next
+            <tr><td> m  <td> Reset full size
+            <tr><td> ,  <td> Resize left
+            <tr><td> .  <td> Resize right
+            <tr><td> t  <td> Toggle "stay on top"
+            <tr><td> l  <td> Toggle horizontal scroll lock
+            <tr><td> r  <td> Reload document
+            <tr><td> ⌘w <td> Close window
+            <tr><td> h &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
+            <tr><td> ? &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <td> Help
+            </table>
+        """)
+        msg_grid = msg_box.findChild(QGridLayout)
+        msg_icon_label = msg_box.findChild(QLabel, "qt_msgboxex_icon_label")
+        msg_grid.removeWidget(msg_icon_label)
+        msg_label = msg_box.findChild(QLabel, "qt_msgbox_label")
+        msg_grid.removeWidget(msg_label)
+        msg_grid.addWidget(msg_label, 0, 0, 1, 2)
+        msg_info_label = msg_box.findChild(QLabel, "qt_msgbox_informativelabel")
+        msg_grid.removeWidget(msg_info_label)
+        msg_grid.addWidget(msg_info_label, 1, 0, 1, 2)
+        msg_label.setContentsMargins(10, 10, 10, 0)
+        msg_info_label.setContentsMargins(10, 0, 10, 0)
+        msg_box.setContentsMargins(2, 0, 0, 0)
+        msg_box.open()
 
 ########################################################################
 # PdfViewer
