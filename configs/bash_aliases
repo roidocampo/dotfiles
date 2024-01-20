@@ -622,7 +622,6 @@ function cenv() {
 		  - c-compiler
 		  - cmake
 		  - coreutils
-		  - ctags
 		  - curl
 		  - findutils
 		  - flex
@@ -643,6 +642,7 @@ function cenv() {
 		  - tar
 		  - tmux=3.1
 		  - tree
+		  - universal-ctags
 		  - vim
 		  - wget
 		  - which

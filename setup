@@ -19,7 +19,6 @@ CONDA_PACKAGES=(
     c-compiler
     cmake
     coreutils
-    ctags
     curl
     findutils
     flex
@@ -39,6 +38,7 @@ CONDA_PACKAGES=(
     tar
     'tmux=3.1'
     tree
+    universal-ctags
     vim
     wget
     which
