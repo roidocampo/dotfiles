@@ -254,6 +254,21 @@ if maparg('<C-L>', 'n') ==# ''
     nnoremap <silent> <C-L> :nohlsearch<CR><C-L>
 endif
 
+let g:tagbar_sort = 0
+"let g:tagbar_singleclick = 1
+let g:tagbar_show_visibility = 0
+
+let g:tagbar_type_python = {
+    \ 'kinds' : [
+        \ 'i:modules:1:0',
+        \ 'v:variables:0:0',
+        \ 'c:gcf:1:0',
+        \ 'f:gcf:1:0',
+        \ 'm:members',
+        \ '?:unknown',
+    \ ],
+\ }
+
 nmap <F8> :TagbarToggle<CR>
 nmap <F7> :UndotreeToggle<CR>
 
