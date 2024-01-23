@@ -56,7 +56,7 @@ MATCHERS = {
         (?!(?:
             import | class | def
         ))
-        (?P<name> [A-Za-z0-9@_ \t]+ )
+        (?P<name> [A-Za-z0-9@_.,:;'"!? \t]+ )
         $
     """,
     # 'subsection' : r"""

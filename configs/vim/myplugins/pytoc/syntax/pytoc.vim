@@ -9,12 +9,12 @@ highlight C_YELLOW ctermfg=3
 highlight C_YELLOW_GREEN ctermfg=2
 
 
-syntax match PyTocSeparator "^=\+\s*$"
-syntax match PyTocSection "^\(\h\|@\).*$"
-syntax match PyTocClass "^\s*\zs\h\w*\ze\s*\:"
 syntax match PyTocFunction "^\s*\zs\h\w*\ze\s*()"
-syntax match PyTocTitle "\%^.*$"
+syntax match PyTocClass "^\s*\zs\h\w*\ze\s*\:"
+syntax match PyTocSeparator "^=\+\s*$"
 syntax match PyTocSubSection "^\s*\[.*\]\s*"
+syntax match PyTocSection "^\(\h\|@\).*$"
+syntax match PyTocTitle "\%^.*$"
 
 highlight link PyTocClass C_BLUE
 highlight link PyTocFunction C_BLUE
