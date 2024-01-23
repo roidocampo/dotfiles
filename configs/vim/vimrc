@@ -127,6 +127,7 @@ call plug#begin('~/.vim/bundle')
     Plug '~/.vim/myplugins/css_align',    { 'for': ['css', 'html', 'bib', 'php', 'svelte'] }
     Plug '~/.vim/myplugins/php_fixspell', { 'for': 'php' }
     Plug '~/.vim/myplugins/md',           { 'for': 'markdown' }
+    Plug '~/.vim/myplugins/pytoc' ",        { 'for': 'python' }
 
 call plug#end()
 
@@ -256,18 +257,37 @@ endif
 
 let g:tagbar_sort = 0
 "let g:tagbar_singleclick = 1
-let g:tagbar_show_visibility = 0
+"let g:tagbar_show_visibility = 0
+
+let g:tagbar_scopestrs = {
+    \    'funnyscope': "",
+    \ }
 
 let g:tagbar_type_python = {
     \ 'kinds' : [
         \ 'i:modules:1:0',
         \ 'v:variables:0:0',
-        \ 'c:gcf:1:0',
-        \ 'f:gcf:1:0',
+        \ 'h:funnyscopes',
+        \ 'c:classes',
+        \ 'f:functions',
         \ 'm:members',
         \ '?:unknown',
     \ ],
+    \ 'kind2scope' : {
+        \ 'h' : 'funnyscope',
+        \ 'c' : 'class',
+        \ 'f' : 'function',
+        \ 'm' : 'member',
+    \ },
+    \ 'scope2kind' :  {
+        \ 'funnyscope' : 'h',
+        \ 'class'      : 'c',
+        \ 'function'   : 'f',
+        \ 'member'     : 'm',
+    \ },
+    \ 'ctagsbin' : 'roiptags.py',
 \ }
+"
 
 nmap <F8> :TagbarToggle<CR>
 nmap <F7> :UndotreeToggle<CR>
