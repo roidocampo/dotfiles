@@ -22,6 +22,7 @@ MATCHERS = {
     'function' : r"""
         ^
         (?P<indent> [ \t]* )
+        (?: async \s+ )?
         def
         [ \t]+
         (?P<name> [a-zA-Z0-9_]+ )
@@ -135,14 +136,15 @@ class PyToc():
 
     def populate_toc_window(self):
         self.mapping = {}
-        toc_buf = self.get_toc_buffer()
-        toc_buf[:] = [Path(self.main_window.buffer.name).name]
+        tmp_buf = [Path(self.main_window.buffer.name).name]
         width = 40
         for toc_num, (line_num, s) in enumerate(self.treat_file(), start=2):
             if line_num:
                 self.mapping[toc_num] = line_num
                 width = max(width, len(s))
-            toc_buf.append(s)
+            tmp_buf.append(s)
+        toc_buf = self.get_toc_buffer()
+        toc_buf[:] = tmp_buf
         return width
 
     def update_toc_window(self):
