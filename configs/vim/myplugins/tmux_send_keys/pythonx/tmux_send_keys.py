@@ -103,7 +103,7 @@ def escape_code(code):
     out = []
     for line in code:
         if line and line[-1] == ";":
-            line = line[:-1] + "\;"
+            line = line[:-1] + "\\;"
         out.append(line)
     return out
 
