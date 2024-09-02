@@ -796,7 +796,9 @@ if has("conceal") && &enc == 'utf-8'
 
  " Superscripts/Subscripts {{{2
  if s:tex_conceal =~ 's'
-  if s:tex_fast =~ 's'
+
+  "if s:tex_fast =~ 's'
+  if exists("g:tex_fast") && s:tex_fast =~ 's'
    syn region texSuperscript	matchgroup=Delimiter start='\^{'	skip="\\\\\|\\[{}]" end='}'	concealends contains=texSpecialChar,texSuperscripts,texStatement,texSubscript,texSuperscript,texMathMatcher
    syn region texSubscript	matchgroup=Delimiter start='_{'		skip="\\\\\|\\[{}]" end='}'	concealends contains=texSpecialChar,texSubscripts,texStatement,texSubscript,texSuperscript,texMathMatcher
   endif

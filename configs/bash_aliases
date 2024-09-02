@@ -12,7 +12,7 @@ alias mv='mv -i'
 # enable color support of ls and also add handy aliases
 ###########################################################################
 
-if \ls -d --color -Chv / 1>/dev/null 2>&1; then
+if \ls --version -d --color -Chv / 1>/dev/null 2>&1; then
 
     # GNU ls
 

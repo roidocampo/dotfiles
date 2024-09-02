@@ -776,6 +776,7 @@ class HtmlViewer(
         super().__init__()
         self.app = app
         self.file = Path(file).resolve()
+        self.eml_file = self.file.with_suffix(".eml")
         self.posHist = []
         self.posHistIdx = -1
         self.synctex_dir = None
@@ -933,7 +934,30 @@ class HtmlViewer(
             self._document_mtime = -1
 
     def load_html(self):
-        self.browser.load(QUrl("file://" + str(self.file)))
+        if self.eml_file.exists():
+            html = self.EML_HEAD
+            with open(self.file, "r") as f:
+                html += f.read()
+            self.browser.setHtml(html)
+        else:
+            self.browser.load(QUrl("file://" + str(self.file)))
+
+    EML_HEAD = """<!doctype html>
+        <html lang="en">
+        <meta charset="utf-8">
+        <style>
+            html {
+                padding: 0px;
+                margin: 0px;
+            }
+            html, body {
+                padding: 0px;
+                margin: 10px;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 12pt;
+            }
+        </style>
+    """
 
     def pageLoadedEvent(self, ok):
         print("Loaded")

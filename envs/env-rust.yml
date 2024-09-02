@@ -1,0 +1,43 @@
+name: env-rust
+channels:
+  - conda-forge
+  - default
+platforms:
+  - linux-64
+  - osx-64
+dependencies:
+  # basic deps
+  - autoconf
+  - automake
+  - bash
+  - bash-completion
+  - bison
+  - c-compiler
+  - cmake
+  - coreutils
+  - curl
+  - findutils
+  - flex
+  - gawk
+  - git
+  - git-subrepo
+  - htop
+  - hunspell
+  - hunspell-en
+  - imagemagick
+  - ipython
+  - libtool
+  - make
+  - nodejs
+  - python
+  - pip
+  - requests
+  - tar
+  - tmux
+  - tree
+  - universal-ctags
+  - vim
+  - wget
+  - which
+  # project deps
+  - rust

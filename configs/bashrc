@@ -132,19 +132,20 @@ function terminal_title {
     local parts=($title)
     local len=${#parts[@]}
     if [ ${#title} -le 80 -o $len -le 5 ]; then
-        echo -n "$title"
+        printf "%s" "$title"
     else
-        echo -n "${parts[0]}"
-        echo -n "/${parts[1]}"
-        echo -n "/..."
-        echo -n "/${parts[len-3]}"
-        echo -n "/${parts[len-2]}"
-        echo -n "/${parts[len-1]}"
+        printf "%s" "${parts[0]}"
+        printf "%s" "/${parts[1]}"
+        printf "%s" "/..."
+        printf "%s" "/${parts[len-3]}"
+        printf "%s" "/${parts[len-2]}"
+        printf "%s" "/${parts[len0]}"
     fi
 }
 
 case "$TERM" in xterm*|rxvt*)
-    PROMPT_COMMAND=$PROMPT_COMMAND'; echo -ne "\033]0;$(terminal_title)\007"' ;;
+    # PROMPT_COMMAND=$PROMPT_COMMAND'; echo -ne "\033]0;$(terminal_title)\007"' ;;
+    PROMPT_COMMAND=$PROMPT_COMMAND'; printf "\033]0;%s\007" "$(terminal_title)"' ;;
 esac
 
 if [ "$TMUX" ]; then

@@ -17,6 +17,15 @@ fi
 [ -n "$ECO" ] && echo ' * Starting login shell'
 
 ########################################################################
+# Nix
+########################################################################
+
+if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+    [ -n "$ECO" ] && echo ' * Initiating Nix'
+    . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+fi
+
+########################################################################
 # PATH and local environment setup
 ########################################################################
 
@@ -37,6 +46,7 @@ fi
 
 prepend_to PATH "/Applications/DjView.app/Contents/bin/"
 prepend_to PATH "$HOME/opt/Macaulay2/bin"
+prepend_to PATH "$HOME/.ghcup/bin"
 prepend_to PATH "$HOME/.cargo/bin"
 prepend_to PATH "$HOME/.bun/bin"
 prepend_to PATH "$HOME/.local/bin"

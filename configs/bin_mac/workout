@@ -1,8 +1,12 @@
 #!/bin/bash
 
+BROWSER="Google Chrome"
+
+# BROWSER="Firefox"
+
 exec \
     open \
-    -na "Google Chrome" \
+    -na "$BROWSER" \
     --args --new-window \
     ~/Dropbox/Sandbox/__nytimes_training/index.html
 
